@@ -187,6 +187,8 @@ xd = r + E_*0.5*p*r;				   // 应用公式2
 
 ## 1. Path Planning是如何做的
 
+示例代码注释见：[git](https://github.com/Fernweh-yang/CodeComments_franka/tree/main/panda_tutorial/source/04_Panda_Cartesian_Trajectory)
+
 - 总体轨迹overall trajectory被描述为：
   $$
   p(t):\mathbb{R}\rightarrow\mathbb{R}^3
@@ -212,11 +214,87 @@ xd = r + E_*0.5*p*r;				   // 应用公式2
 
     <center style="color:#C125C0C0">图2:sample trajectory</center>
 
-- 
+### 1.1. Motion Profile
 
-## 2. Motion Profile
+- 什么是motion profile"
 
-### 2.1 基本概念
+  机械臂路径规划中的Motion Profile（运动剖面）是指描述机械臂运动随时间变化的速度、加速度和位置的曲线。如上面的$s(t)$
 
-- 机械臂路径规划中的Motion Profile（运动剖面）是指描述机械臂运动随时间变化的速度、加速度和位置的曲线。如上面的$s(t)$
-- 
+## 2. 轨迹规划
+
+### 2.1 梯形速度曲线规划
+
+- [参考1](https://www.cnblogs.com/wdzeng/p/11633512.html)
+- [参考2](https://blog.csdn.net/xiaozisheng2008_/article/details/114339938)
+
+### 2.2 五次多项式插值轨迹
+
+- [参考](https://blog.csdn.net/xiaozisheng2008_/article/details/114167606)
+- [参考2](https://www.cnblogs.com/21207-iHome/p/7843517.html)
+- 代码注释见：[git](https://github.com/Fernweh-yang/CodeComments_franka/tree/main/panda_tutorial/source/trajectory)
+
+# 三、libfranka
+
+## 1.控制逻辑
+
+下面的示例代码来自：[git](https://github.com/Fernweh-yang/CodeComments_franka/blob/main/panda_tutorial/source/04_Panda_Cartesian_Trajectory/do_cartesian_trajectory.cpp)
+
+1. 连接机器人：
+
+   ```c++
+   std::string robot_ip = "192.168.3.127";
+   franka::Robot panda(robot_ip);
+   setDefaultBehaviour(panda);
+   ```
+
+2. 读取机器人当前状态
+
+   ```c++
+   franka::RobotState initial_state = panda.readOnce();
+   // 将4X4的变换矩阵，转为6维数组(3 translations, 3 RPY rotations) 
+   Eigen::Vector6d initial_pose = homogeneousTfArray2PoseVec(initial_state.O_T_EE_c);
+   ```
+
+3. 设置目标位姿
+
+   ```c++
+   // 目标位姿，只是在位移translation上加了0.1
+   Eigen::Vector6d targetPose = initial_pose;
+   targetPose.head<3>() += Eigen::Vector3d::Constant(0.1);
+   ```
+
+4. **设计轨迹控制器**
+
+   ```c++
+   // 创建起始点到终点的轨迹
+   // v_max = 0.05, a_max = 0.5 and j_max = 1e-3    
+   auto traj = LinearTrajectory(initial_pose, targetPose, 0.05, 0.5, 1.e-3);
+   // 创建每次迭代运行的控制器
+   //1.这个控制器是写在类TrajectoryIteratorCartesianVelocity里
+   //	由于类里写了函数调用运算符（Function Call Operator）operator()
+   //	所以之后可以像函数一样调用实例motionIterator
+   //2.c++14新引入的make_unique创建一个智能指针，动态分配资源
+   // 	std::make_unique<xxx>(yyy) xxx是类的名字,y是给构造函数的参数
+   auto motionIterator = std::make_unique<TrajectoryIteratorCartesianVelocity>(traj); 
+   ```
+
+   - motionIterator背后的operator()的使用参见[documentation](https://frankaemika.github.io/libfranka/classfranka_1_1Robot.html#callback-docs:~:text=The%20following%20incomplete%20example%20shows%20the%20general%20structure%20of%20a%20callback%20function%3A)
+
+     - 控制逻辑是：
+
+       每次接收到一个新的机器人状态后，callback()函数即我们的operator()会计算应做出的反映。频率是1khz
+
+5. 发送控制命令给机器人
+
+   ```c++
+   panda.control(*motionIterator, controller_mode = franka::ControllerMode::kCartesianImpedance);
+   ```
+
+   - motionIterator：即第4步控制器
+   - controller_mode：用于执行动作的franka内置控制器
+     - kJointImpedance关节阻抗控制
+       - 关节阻抗控制是一种机器人控制方法，通过控制每个机器人关节的阻抗来实现控制。
+       - 在关节空间中进行控制
+     - kCartesianImpedance笛卡尔阻抗控制
+       - 笛卡尔阻抗控制是另一种机器人控制方法，通过控制机器人的笛卡尔（Cartesian）位置和姿态的阻抗来实现控制。
+       - 在笛卡尔空间中进行控制
