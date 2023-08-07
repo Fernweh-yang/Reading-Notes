@@ -220,14 +220,63 @@ xd = r + E_*0.5*p*r;				   // 应用公式2
 
   机械臂路径规划中的Motion Profile（运动剖面）是指描述机械臂运动随时间变化的速度、加速度和位置的曲线。如上面的$s(t)$
 
-## 2. 轨迹规划
+## 2. trajectory planning
 
-### 2.1 梯形速度曲线规划
+参考书：modern robotics
+
+### 2.1 基本概念：
+
+**trajectory**：the specification具体说明 of robot positon as a function of time。
+
+- 轨迹由2部分组成：
+  - path：a purely geometric description of the sequence of configurations achieved by the robot
+  - time scaling：specifies the times when those configurations
+    are reached
+- 轨迹可分为3种
+  - point-to-point straight-line trajectories in both joint space and task space; 
+  - trajectories passing through a sequence of timed via points; 
+  - minimum-time trajectories along specified paths taking actuator limits into consideration
+
+**trajectory planning**：End-effector需要从一位姿移动到另一位姿，需要设计一条满足各个constranits的轨迹
+
+### 2.2 Path
+
+最简单的就是直线
+
+- 如果是joint space很简单
+
+  $\theta(s)=\theta_{start}+s(\theta_{end}-\theta_{start}),\ s\in[0,1]$
+
+- 如果是task space，由于SE(3)对加法不封闭，所以有2种方法来表示：
+
+  - Screw motion:
+
+    X是End-effector的 pose
+    $$
+    X(s)=X_{start}exp(log(X_{start}^{-1}X_{end})s)
+    $$
+
+  - decoupled rotational motion:
+
+    此时$X=(R,p)$
+    $$
+    \begin{align}
+    p(s)&=p_{start}+s(p_{end}-p_{start})\\
+    R(s)&=R_{start}exp(log(R_{start}^TR_{end})s)
+    \end{align}
+    $$
+    
+
+### 2.3 Time Scaling
+
+即上面路径中的s=s(t)
+
+#### 2.3.1 梯形速度曲线规划
 
 - [参考1](https://www.cnblogs.com/wdzeng/p/11633512.html)
 - [参考2](https://blog.csdn.net/xiaozisheng2008_/article/details/114339938)
 
-### 2.2 五次多项式插值轨迹
+#### 2.3.2 五次多项式插值轨迹
 
 - [参考](https://blog.csdn.net/xiaozisheng2008_/article/details/114167606)
 - [参考2](https://www.cnblogs.com/21207-iHome/p/7843517.html)
