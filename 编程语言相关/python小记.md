@@ -351,7 +351,7 @@ A.func3()
   - 但并不会像C++中定义了抽象类就有抽象类的性质了：只有重写了才能实例
 - 并用 `@abstractmethod修饰符` 来表示抽象方法
   - 如果子类没有重写@abstractmethod修饰的方法，会报TypeError异常
-例子：
+  例子：
 ```python
 from abc import ABC,abstractmethod
 class A(ABC):
@@ -406,3 +406,59 @@ l = DataSet()
 #用户进行属性调用的时候，直接调用images即可，而不用知道属性名_images，因此用户无法更改属性，从而保护了类的属性。
 print(l.images) # 加了@property后，可以用调用属性的形式来调用方法,后面不需要加（）。
 ```
+
+
+
+# 4. 如何创建包
+
+Python 中的包（Package）和 C++ 中的命名空间（Namespace）在某种程度上具有类似的功能，都是用于组织和管理代码，避免命名冲突，提供更好的模块化和代码复用性。
+
+## 4.1 基本步骤
+
+1. **创建文件夹**：首先，创建一个文件夹来作为包的根目录。你可以为这个文件夹取一个有意义的名称，例如 `my_package`。
+2. **在文件夹中创建 `__init__.py` 文件**：在这个包文件夹中，创建一个名为 `__init__.py` 的文件。这个文件会被视为包的初始化文件，定义包的属性、接口和初始化代码。可以是空文件，也可以包含你希望在包被导入时执行的代码。
+3. **在包文件夹中创建模块文件**：在包文件夹中，可以创建多个模块文件，每个模块文件包含相关的函数、类、变量等代码。模块文件的命名可以按照你的需求进行，但最好遵循一些命名规则。
+
+## 4.2 例子
+
+如何定义一个名为 `my_package` 的包，其中包含两个模块 `module1.py` 和 `module2.py`：
+
+1. 创建文件夹结构
+
+   ```
+   my_package/
+   ├── __init__.py
+   ├── module1.py
+   └── module2.py
+   ```
+
+2. 在 `__init__.py` 文件中可以添加一些初始化代码，例如：
+
+   ```python
+   print("Initializing my_package...")
+   ```
+
+3. 在 `module1.py` 中定义一个简单的函数：
+
+   ```python
+   def greet():
+       print("Hello from module1!")
+   ```
+
+4. 在 `module2.py` 中定义另一个函数：
+
+   ```python
+   def farewell():
+       print("Goodbye from module2!")
+   ```
+
+5. 在其他Python文件中调用my_package包中的这2个模块
+
+   ```python
+   from my_package import module1, module2
+   
+   module1.greet()
+   module2.farewell()
+   ```
+
+   
