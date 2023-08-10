@@ -713,3 +713,41 @@ int main(int argc,char *argv[])// 等于 int main(int argc,char **argv);
    ```
 
    
+
+
+
+## 5. 类里不同成员函数使用同一个类对象
+
+- 问题场景:
+
+  在类A的Init()函数里实例化类B, 然后在类A的update()函数里也想用这个类B的对象
+
+- 先在类A的.h文件里加2个类B/C的指针
+
+  ```c++
+  Class A{
+  public:
+  	LinearTrajectory* traj;
+      TrajectoryIteratorCartesian* traj_Car;    
+  }
+  ```
+
+- 再在A的.cpp文件中实例化
+
+  ```c++
+  // traj是指向LinearTrajectory对象的指针
+  traj = new LinearTrajectory(initial_pose, end_pose, 0.05,0.5,1.e-3);
+  // 由于下面这个类的构造函数的参数是引用,所以需要对指针traj进行解引用操作来获得指针指向的对象,即*traj
+  traj_Car = new TrajectoryIteratorCartesian(*traj);
+  ```
+  
+  - 注意上面TrajectoryIteratorCartesian类的定义为`TrajectoryIteratorCartesian(const LinearTrajectory &traj)`
+  
+    - 这个类的构造函数需要的是类LinearTrajectory的引用.
+  
+  - 如果TrajectoryIteratorCartesian类的定义为`TrajectoryIteratorCartesian(const LinearTrajectory *traj)`
+    
+    - 此时就要用`traj_Car = new TrajectoryIteratorCartesian(& traj);`来实例化了
+    - 因为此时需要的是一个指针的地址
+    
+    
