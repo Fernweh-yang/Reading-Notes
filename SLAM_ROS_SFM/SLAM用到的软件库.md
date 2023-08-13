@@ -1331,18 +1331,11 @@ g2o可以求解任何能够表示为图优化的最小二乘问题。
 - 顶点：表示优化变量
 - 边：表示误差项
 
-## 3. 使用
-
-用g2o进行优化需要做如下事：
-
-1. 定义顶点和边的类型
-2. 构建图
-3. 选择优化算法
-4. 调用g2o进行优化，返回结果
 
 
 
-## 4. 卸载
+
+## 3. 卸载
 
 ```
 sudo rm -r /usr/local/include/g2o
@@ -1352,7 +1345,7 @@ sudo rm -r /usr/local/lib/libg2o*
 sudo rm -r /usr/local/bin/g2o*
 ```
 
-## 5. Doxygen文档
+## 4. Doxygen文档
 
 文档在源码目录中，需要自己编译
 
@@ -1362,6 +1355,24 @@ doxygen doxy.config
 ```
 
 然后生成的html文件夹中找到index.html，就是文档了。
+
+
+
+## 5. 使用
+
+具体的代码例子见slam14讲笔记的第6，9，10章
+
+用g2o进行优化需要做如下事：
+
+1. 创建一个线性求解器LinearSolver。
+2. 创建BlockSolver，并用上面定义的线性求解器初始化。
+3. 创建总求解器solver，并从GN/LM/DogLeg 中选一个作为迭代策略，再用上述块求解器BlockSolver初始化。
+4. 创建图优化的核心：稀疏优化器（SparseOptimizer）。
+5. 定义图的顶点和边，并添加到SparseOptimizer中。
+6. 设置优化参数，开始执行优化。
+   
+
+
 
 # Boost库
 

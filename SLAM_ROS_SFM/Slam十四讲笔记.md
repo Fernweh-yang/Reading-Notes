@@ -1644,7 +1644,7 @@ slam的状态估计问题，可以变成一个最小二乘问题least squares me
   
   它依然是一个高斯分布。
   
-- 对于**单次观测的最大似然估计**，可以使用**最小化负对数**来求一个高斯分布的最大似然。
+- 对于6式，考虑**单次观测的最大似然估计**，可以使用**最小化负对数**(下面1,2这两步，公式见书)来求一个高斯分布的最大似然。
 
   1. 首先将高斯分布写成，概率密度函数展开形式
   2. 然后对其取负对数
@@ -1804,6 +1804,15 @@ $$
 
 ### 2.2 高斯牛顿法：
 
+- 回顾1式的最小二乘问题：
+  $$
+  \mathop{min}_x\ F(x)=\frac{1}{2}||f(x)||_2^2 \tag{1}
+  $$
+
+  - f(x)：任意非线性函数，$R^N\rightarrow R$
+
+    > 一个函数可以将一个或多个输入变量映射到一个输出变量
+
 - 有别于牛顿法，高斯牛顿法是把1式的f(x)而非F(x)进行泰勒展开
   $$
   f(x+\Delta x)\approx f(x)+\mathbf{J}(x)^T\Delta x \tag{6}
@@ -1817,7 +1826,7 @@ $$
   \end{align} \tag{7}
   $$
 
-- 求7式右侧关于$\Delta x$的导数并令其为0,得到**增量方程**如下：
+- 求7式右侧关于$\Delta x$的导数并令其为0,得到**增量方程**（也叫高斯牛顿方程）如下：
   $$
   \begin{aligned}
   \mathbf{J}(x)f(x)+\mathbf{J}(x)\mathbf{J}^T(x)\Delta x&=0\\
@@ -1830,11 +1839,11 @@ $$
   - 也可以称之为高斯牛顿方程(Gauss-Newton equation)或者正规方程(Normal equation)
   - 相比于牛顿法中的5式，高斯牛顿法用$\mathbf{J}(x)\mathbf{J}^T(x)$**作为牛顿法中二阶海塞矩阵H的近似，从而省略了计算复杂的海塞矩阵过程。**
 
-- 如上，得到高斯牛顿法的算法步骤：
+- 如上，得到**高斯牛顿法的算法**步骤：
 
-  1. 给定初始值$x_0$
-  2. 对于第k次迭代，求出当前的雅可比矩阵$\mathbf{J}(x_k)$和误差$f(x_k)$
-  3. 求解增量方程：$H\Delta x_k=g$
+  1. 初始化：根据经验或启发式方法，初始化参数$x_0$，即要优化的变量
+  2. 线性化：对于第k次迭代，求出当前的雅可比矩阵$\mathbf{J}(x_k)$和非线性方程$f(x_k)$，
+  3. 求解增量方程：$H\Delta x_k=g$，即8式
   4. 若$\Delta x_k$足够小，则停止。否则，令$x_{k+1}=x_k+\Delta x_k$，返回第二步。
 
 - 高斯牛顿法的**缺点**
@@ -1871,7 +1880,7 @@ L-M方法全称Levenberg-Marquardt方法，一定层度上修正了高斯牛顿�
   - $\rho$太小：说明实际减小的值远少于近似减小的值，近似较差，需要缩小近似范围
   - $\rho$比较大：说明实际下降的值比预计的要打，可以放大近似范围
 
-- 如上，得到L-M算法：
+- 如上，得到**L-M算法**：
 
   1. 给定初始值$x_0$,和初始优化半径$\mu$
 
@@ -1923,7 +1932,7 @@ L-M方法全称Levenberg-Marquardt方法，一定层度上修正了高斯牛顿�
 
   得到最小二乘问题：
   $$
-  \mathop{min}_{a,b,c}\frac{1}{2}\sum_{i=1}^N|| y_i-exp(ax_i^2+bx_i+c) ||^2
+  \mathop{min}_{a,b,c}\ F(a,b,c)=\mathop{min}_{a,b,c}\frac{1}{2}||f(a,b,c)||_2^2=\mathop{min}_{a,b,c}\frac{1}{2}\sum_{i=1}^N|| y_i-exp(ax_i^2+bx_i+c) ||^2 \tag{13}
   $$
 
 - 解法：
@@ -1936,16 +1945,22 @@ L-M方法全称Levenberg-Marquardt方法，一定层度上修正了高斯牛顿�
     \frac{\partial e_i}{\partial a}&=-x_i^2exp(ax_i^2+bx_i+c)\\
     \frac{\partial e_i}{\partial b}&=-x_iexp(ax_i^2+bx_i+c)\\
     \frac{\partial e_i}{\partial c}&=-exp(ax_i^2+bx_i+c)
-    \end{align}
+    \end{align} \tag{14}
     $$
 
   - 根据8式列出高斯牛顿法的增量方程：
     $$
-    \big( \sum_{i=1}^{100}\mathbf{J}_i(\sigma^2)^{-1}\mathbf{J}_i^T \big)\Delta x_k = \sum_{i=1}^{100}-\mathbf{J}_i(\sigma^2)^{-1}e_i
+    \begin{align}
+    \underbrace{\mathbf{J}(x)\mathbf{J}^T(x)}_{H(x)}\Delta x &=\underbrace{-\mathbf{J}(x)f(x)}_{g(x)} \tag{8}\\
+    \big( \sum_{i=1}^{100}\mathbf{J}_i(\sigma^2)^{-1}\mathbf{J}_i^T \big)\Delta x_k &= \sum_{i=1}^{100}-\mathbf{J}_i(\sigma^2)^{-1}e_i \tag{15}
+    \end{align}
     $$
-
+    
     - 其中$\mathbf{J}_i=[\frac{\partial e_i}{\partial a},\frac{\partial e_i}{\partial b},\frac{\partial e_i}{\partial c}]^T$
+    - 15式也可以用向量的形式写，即将所有的J排成一列
     - 这里$\sigma$是噪声sigma值，乘上J的平方，而不是J的参数
+    
+  - 不断的更新参数a,b,c，直到收敛
 
 ### 3.1 手写高斯牛顿法
 
@@ -1962,8 +1977,8 @@ using namespace std;
 using namespace Eigen;
 
 int main(int argc, char **argv) {
-  double ar = 1.0, br = 2.0, cr = 1.0;         // 真实参数值
-  double ae = 2.0, be = -1.0, ce = 5.0;        // 估计参数值
+  double ar = 1.0, br = 2.0, cr = 1.0;         // 真实参数值，用于生成模拟数据，也是参数应该优化到的目标
+  double ae = 2.0, be = -1.0, ce = 5.0;        // 估计参数值，待优化的参数
   int N = 100;                                 // 数据点
   double w_sigma = 1.0;                        // 噪声Sigma值
   double inv_sigma = 1.0 / w_sigma;
@@ -1989,20 +2004,30 @@ int main(int argc, char **argv) {
 
     for (int i = 0; i < N; i++) {
       double xi = x_data[i], yi = y_data[i];  // 第i个数据点
+      // ******************* 建立误差项e，即非线性方程f(x)，13式 *******************
       double error = yi - exp(ae * xi * xi + be * xi + ce);
       Vector3d J; // 雅可比矩阵
+        
+      // ******************* 计算14式 *******************
       J[0] = -xi * xi * exp(ae * xi * xi + be * xi + ce);  // de/da
       J[1] = -xi * exp(ae * xi * xi + be * xi + ce);  // de/db
       J[2] = -exp(ae * xi * xi + be * xi + ce);  // de/dc
-
-      H += inv_sigma * inv_sigma * J * J.transpose();
-      b += -inv_sigma * inv_sigma * error * J;
+        
+      // ******************* 计算15式的变量*******************
+      H += inv_sigma * inv_sigma * J * J.transpose();	// 15式的左边
+      b += -inv_sigma * inv_sigma * error * J;			// 15式的右边
 
       cost += error * error;
     }
-
+	
+  	// ******************* 计算15式 *******************
     // 求解线性方程 Hx=b
     // Vector3d x = A.ldlt().solve(b);//求解Ax=b
+    // ldlt() 函数用于执行Cholesky分解，这个分解会将矩阵分解为 A=LDL^T，所以也被称为LDLT分解
+    	// L:下三角矩阵且所有对角元素均为正实数
+      	// D:对角矩阵
+      	// L^T:\mathbf {L} 的转置矩阵
+    // solve() 使用LDLT分解来求解线性方程
     Vector3d dx = H.ldlt().solve(b);
     if (isnan(dx[0])) {   // c++11提供的isnan用于判断是否是非数NaN：表示未定义或不可表示的值
       cout << "result is nan!" << endl;
@@ -2013,7 +2038,8 @@ int main(int argc, char **argv) {
       cout << "cost: " << cost << ">= last cost: " << lastCost << ", break." << endl;
       break;
     }
-
+	
+  	// ******************* 更新参数 *******************
     ae += dx[0];
     be += dx[1];
     ce += dx[2];
@@ -2193,50 +2219,66 @@ target_link_libraries(test ${OpenCV_LIBS} ${CERES_LIBRARIES})
 #include <chrono>
 
 using namespace std;
+// g2o的标准顶点和边通常不能满足需求，所以一般都需要对他们进行重写
 
-// g2o第一步： 继承g2o顶点基本类，创建我们自己的曲线模型的顶点，模板参数：优化变量维度和数据类型
+// ********************* 重写顶点 *********************
+// 继承g2o顶点基本类，创建我们自己的曲线模型的顶点，模板参数：优化变量维度和数据类型
+// 标准顶点BaseVertex< D, T >： D顶点的最小维度，T估计值的类型
 class CurveFittingVertex : public g2o::BaseVertex<3, Eigen::Vector3d> {
 public:
+  // 宏，用于在使用Eigen库的C++类中自定义内存分配，以确保对齐内存分配，从而提高程序的性能
+  // 内存对齐可以减少内存访问的成本，提高数据访问速度。而Eigen库的数据结构通常是对齐的
+  // 所以在类中加上这个宏，就是重载了这个类的new操作符，确保通过该操作符分配的内存是对齐的。
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-  // 重写顶点的重置函数，因为本问题的优化参数是a,b,c，所以是3个
+  // 1. 重写顶点的重置函数，用来将顶点的估计值初始化为0,0,0
+  // 因为本问题的优化参数是a,b,c，所以是3个
   virtual void setToOriginImpl() override {
-    _estimate << 0, 0, 0;
+  	_estimate << 0, 0, 0;	// 要被优化的估计值的初始值设为0，0，0
   }
 
-  // 重写顶点的更新函数 x_{k+1} = x_k +dx
+  // 2. 重写顶点的更新函数 x_{k+1} = x_k +dx
   // 简单的加法为什么更新要自己写，g2o不帮我们完成呢？ 因为在向量空间中的确是简单的加法，但如果x是位姿(位移矩阵)就不一定有加法了，根据第四讲需要用左乘或右乘的方式更新。
   virtual void oplusImpl(const double *update) override {
-    _estimate += Eigen::Vector3d(update);
+    _estimate += Eigen::Vector3d(update);	// 要被优化的估计值每次迭代的更新函数
   }
 
-  // 存盘和读盘：因为本例不需要读写操作，所以留空
+  // 3. 存盘和读盘：因为本例不需要读写操作，所以留空
   virtual bool read(istream &in) {}
 
   virtual bool write(ostream &out) const {}
 };
 
+// ********************* 重写边 *********************
 // g2o第二步： 继承g2o边基本类，创建我们自己的误差模型 模板参数：观测值维度，类型，连接顶点类型
+// BaseUnaryEdge一元边(D，E,Vertex) D:
 class CurveFittingEdge : public g2o::BaseUnaryEdge<1, double, CurveFittingVertex> {
 public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-
+  
+  // 1. 边的构造函数，这里x是3.0中的x，即观测值
   CurveFittingEdge(double x) : BaseUnaryEdge(), _x(x) {}
 
-  // 重写边的误差计算，计算曲线模型误差
+  // 2. 重写边的误差计算，计算曲线模型误差
   virtual void computeError() override {
     // 取出边所连接的的顶点的当前估计值
     const CurveFittingVertex *v = static_cast<const CurveFittingVertex *> (_vertices[0]);
+    // 读取需要优化的估计值
     const Eigen::Vector3d abc = v->estimate();
-    // 根据曲线模型 和 它的观测值进行比较
+    // 误差项：观测值-非线性方程。 参照13式
     _error(0, 0) = _measurement - std::exp(abc(0, 0) * _x * _x + abc(1, 0) * _x + abc(2, 0));
   }
 
   // 重写边的雅可比计算，计算每条边相对于顶点的雅可比
+  // 下面的公式计算参考3.0的14式
   virtual void linearizeOplus() override {
+    // _vertices[0]：这是边的顶点数组中的第一个（唯一的）元素，它是一个指向顶点的基类指针。
+    // static_cast<xx>(yy)：将YY变量的类型转换为xx类型
     const CurveFittingVertex *v = static_cast<const CurveFittingVertex *> (_vertices[0]);
-    const Eigen::Vector3d abc = v->estimate();
-    double y = exp(abc[0] * _x * _x + abc[1] * _x + abc[2]);
+    const Eigen::Vector3d abc = v->estimate();	// 读取要优化的变量，即顶点的值
+    // 3.0的14式
+    double y = exp(abc[0] * _x * _x + abc[1] * _x + abc[2]); 
+    // _jacobianOplusXi变量：用于存储关于边的代价函数对于连接的顶点的雅可比矩阵
     _jacobianOplusXi[0] = -_x * _x * y;
     _jacobianOplusXi[1] = -_x * y;
     _jacobianOplusXi[2] = -y;
@@ -2247,61 +2289,85 @@ public:
   virtual bool write(ostream &out) const {}
 
 public:
-  double _x;  // x 值， y 值为 _measurement
+  double _x;  // 测量值：x 值； _measurement观测值：y 值
 };
 
+
+
 int main(int argc, char **argv) {
-  double ar = 1.0, br = 2.0, cr = 1.0;         // 真实参数值
-  double ae = 2.0, be = -1.0, ce = 5.0;        // 估计参数值
+  double ar = 1.0, br = 2.0, cr = 1.0;         // 真实参数值，真实参数值，用于生成模拟数据，也是参数应该优化到的目标
+  double ae = 2.0, be = -1.0, ce = 5.0;        // 估计参数值，即我们要优化的变量
   int N = 100;                                 // 数据点
   double w_sigma = 1.0;                        // 噪声Sigma值
   double inv_sigma = 1.0 / w_sigma;
   cv::RNG rng;                                 // OpenCV随机数产生器
 
-  vector<double> x_data, y_data;      // 数据
+  vector<double> x_data, y_data;      		   // 生成模拟的观测数据
   for (int i = 0; i < N; i++) {
     double x = i / 100.0;
     x_data.push_back(x);
     y_data.push_back(exp(ar * x * x + br * x + cr) + rng.gaussian(w_sigma * w_sigma));
   }
+	
 
-  // 构建图优化，先设定g2o
-  typedef g2o::BlockSolver<g2o::BlockSolverTraits<3, 1>> BlockSolverType;  // 每个误差项优化变量维度为3，误差值维度为1
-  typedef g2o::LinearSolverDense<BlockSolverType::PoseMatrixType> LinearSolverType; // 线性求解器类型
-
-  // 梯度下降方法，可以从GN, LM, DogLeg 中选
+  // ********************* 1.定义块求解器BlockSolver*********************
+  // BlockSolver 是一个通用的求解器框架，用于求解大多数图优化问题
+  // BlockSolverTraits 用于指定块矩阵的维度，每个误差项优化变量维度为3，误差值维度为1
+  // 块求解器将整个问题划分成块状的子问题，每个子问题对应一个顶点的一部分和与之相关的边。这样，优化问题被分解为多个小的线性方程组。块求解器在迭代中解决这些小的线性方程组，通过优化每个子问题的变量来逐步逼近全局最优解。
+  typedef g2o::BlockSolver<g2o::BlockSolverTraits<3, 1>> BlockSolverType;  			
+    
+  // ********************* 2.定义线性求解器LinearSolver *********************
+  // LinearSolverDense 是一个线性求解器，用于求解线性方程组，通常在图优化问题的每一步迭代中使用。
+  // 使用 BlockSolverType 的 PoseMatrixType 作为块矩阵的类型。这个设置是为了使线性求解器与之前设置的块求解器类型匹配，以确保整个求解器链能够正常工作。
+  // 在图优化中，每个子问题都会对应一个线性方程组，其中方程的系数矩阵是与边相关的雅可比矩阵。线性求解器的作用就是将这个线性方程组的系数矩阵求解出来，以得到顶点的更新量，从而迭代地更新顶点的估计值
+  typedef g2o::LinearSolverDense<BlockSolverType::PoseMatrixType> LinearSolverType; 
+  
+  // ********************* 3.创建总求解器solver*********************
+  // 从最小二乘法计算算法:GN, LM, DogLeg 中选一个作为迭代策略，这里选了高斯牛顿
+  // 创建上面定义的块求解器BlockSolver和线性求解器LinearSolver，以此初始化总求解器
   auto solver = new g2o::OptimizationAlgorithmGaussNewton(
     g2o::make_unique<BlockSolverType>(g2o::make_unique<LinearSolverType>()));
-  g2o::SparseOptimizer optimizer;     // 图模型
-  optimizer.setAlgorithm(solver);   // 设置求解器
-  optimizer.setVerbose(true);       // 打开调试输出
+  
+  // ********************* 4.创建稀疏优化器SparseOptimizer*********************
+  // 创建SparseOptimizer类对象，用于管理优化过程中的顶点、边和求解器等相关内容
+  g2o::SparseOptimizer optimizer;   
+  // 设置优化过程中求解器
+  optimizer.setAlgorithm(solver);  
+  // 开启了优化器的详细输出模式，也就是调试输出模式
+  optimizer.setVerbose(true);       
 
   // 往图中增加顶点
+  // ********************* 5.定义顶点，并添加到SparseOptimizer中*********************
   CurveFittingVertex *v = new CurveFittingVertex();
-  v->setEstimate(Eigen::Vector3d(ae, be, ce));
-  v->setId(0);
-  optimizer.addVertex(v);
+  v->setEstimate(Eigen::Vector3d(ae, be, ce));	// 为顶点 v 设置估计值，即要优化的变量
+  v->setId(0);									// 为顶点 v 设置一个唯一的ID
+  optimizer.addVertex(v);						// 将创建的顶点 v 添加到图优化器中
 
   // 往图中增加边
+  // ********************* 5.定义边，并添加到SparseOptimizer中*********************
   for (int i = 0; i < N; i++) {
     CurveFittingEdge *edge = new CurveFittingEdge(x_data[i]);
-    edge->setId(i);
+    edge->setId(i);						  // 为边设置一个唯一的id
     edge->setVertex(0, v);                // 设置连接的顶点
     edge->setMeasurement(y_data[i]);      // 观测数值
-    edge->setInformation(Eigen::Matrix<double, 1, 1>::Identity() * 1 / (w_sigma * w_sigma)); // 信息矩阵：协方差矩阵之逆
+    // 设置信息矩阵：1 / (噪声标准差的平方)
+    // 信息矩阵用于表示测量值x的精度或权重
+    // 因为3.0中的问题，只有一个测量值x,所以下面的维度是1x1
+    edge->setInformation(Eigen::Matrix<double, 1, 1>::Identity() * 1 / (w_sigma * w_sigma)); 
     optimizer.addEdge(edge);
   }
-
-  // 执行优化
+	
+  
+  // ********************* 6.设置优化参数，并开始优化 *********************
   cout << "start optimization" << endl;
   chrono::steady_clock::time_point t1 = chrono::steady_clock::now();
-  optimizer.initializeOptimization();
-  optimizer.optimize(10);
+  optimizer.initializeOptimization();	// 图优化初始化
+  optimizer.optimize(10);				// 进行10次迭代优化
   chrono::steady_clock::time_point t2 = chrono::steady_clock::now();
   chrono::duration<double> time_used = chrono::duration_cast<chrono::duration<double>>(t2 - t1);
   cout << "solve time cost = " << time_used.count() << " seconds. " << endl;
 
-  // 输出优化值
+  // 输出优化完的参数值
   Eigen::Vector3d abc_estimate = v->estimate();
   cout << "estimated model: " << abc_estimate.transpose() << endl;
 
