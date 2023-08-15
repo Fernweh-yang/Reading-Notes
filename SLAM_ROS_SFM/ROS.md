@@ -238,39 +238,72 @@ $ echo $ROS_PACKAGE_PATH
 
 通过修改**package.xml**来customize包。
 
-编译后生成的package.xml会在新包的文件中。比如~/Desktop/catkin_ws/src/beginner_tutoria
+编译后生成的package.xml会在新包的文件中。比如~/Desktop/catkin_ws/src/beginner_tutoria/package.xml
 
 1. description tag:描述这个包干什么用的
 
    ```xml
-   5   <description>The beginner_tutorials package</description>
+   <description>The beginner_tutorials package</description>
    ```
 
 2. maintainer tags:告诉别人谁拥有这个包，并如何联系
 
    ```xml
-   10   <maintainer email="you@yourdomain.tld">Your Name</maintainer>
+   <maintainer email="you@yourdomain.tld">Your Name</maintainer>
    ```
 
 3. license tags:这个包用的许可协议
 
    ```xml
-   16   <license>BSD</license>
+   <license>BSD</license>
    ```
 
-4. dependencies tags:这个包用到的依赖
+4. dependencies tags:**这个包用到的依赖(**最重要的功能)
 
    ```xml
-   51   <buildtool_depend>catkin</buildtool_depend>
-   52 
-   53   <build_depend>roscpp</build_depend>
-   54   <build_depend>rospy</build_depend>
-   55   <build_depend>std_msgs</build_depend>
-   56 
-   57   <exec_depend>roscpp</exec_depend>
-   58   <exec_depend>rospy</exec_depend>
-   59   <exec_depend>std_msgs</exec_depend>
+   <!--编译工具是catkin-->
+   <buildtool_depend>catkin</buildtool_depend>
+    
+   <!--编译时依赖的包-->
+   <build_depend>roscpp</build_depend>
+   <build_depend>rospy</build_depend>
+   <build_depend>std_msgs</build_depend>
+   
+   <!--编译输出依赖的包-->
+   <build_export_depend>roscpp</build_export_depend>
+   <build_export_depend>rospy</build_export_depend>
+   <build_export_depend>std_msgs</build_export_depend>
+   
+   <!--运行时依赖的包-->
+   <exec_depend>roscpp</exec_depend>
+   <exec_depend>rospy</exec_depend>
+   <exec_depend>std_msgs</exec_depend>
    ```
+
+5. export tags:用于向其他ROS软件包或工具提供一些特定的信息
+
+   如此，其他包就可以方便的使用当前包定义的插件/节点/消息类型
+
+   ```xml
+   <!--指定当前包提供的插件、节点、消息类型等-->
+   <export>
+       <!--${prefix} 是一个变量，用于表示ROS软件包的安装路径前缀。 -->
+       <!-- 这是一个controller插件 -->
+       <controller_interface plugin="${prefix}/franka_example_controllers_plugin.xml" />
+       
+       <!-- 常规用法：-->
+       <!-- 导出插件：my_plugin-->
+       <plugin name="my_plugin" type="my_package/MyPlugin" />
+       
+       <!-- 导出节点：my_node-->
+     	<node name="my_node" type="beginner_tutoria/my_node" />
+   
+     	<!-- 导出消息类型：MyMessageType -->
+     	<message_package message="beginner_tutoria/MyMessageType" />
+   </export>
+   ```
+
+   
 
 ### 2.源码/二进制安装包
 
@@ -777,7 +810,7 @@ rosrun tf static_transform_publisher 1 0 0 0 0 0 1 world av1 100 __name:=av1broa
 
 ## $$ROS通信框架
 
-### 0)不同通信框架的对比
+### 0. 不同通信框架的对比
 
 ROS的通信方式有以下四种：
 
@@ -798,7 +831,30 @@ ROS的通信方式有以下四种：
 | 应用场景 |       连续、高频的数据发布       |     偶尔使用的功能/具体的任务     |
 |   举例   |     激光雷达、里程计发布数据     |    开关传感器、拍照、逆解计算     |
 
-### 1)话题Topic
+#### Services vs Action
+
+- Action 相比 Service的优点：
+
+  程序A(client)向程序B(server)申请实现某功能(调用函数)时：
+
+  - 如果是Service，那A需要等待B相应后才能做其他事，因为它的通信方式是(同步通信)
+  - 如果是action，A在调用B的服务后，可以不用等待结果立刻去执行其他程序。A会周期性的从B那得到状态status,结果result，和反馈feedback
+  - action也可以随时发送cancel，取消正在执行的任务。
+
+  所以action比service更**适合**执行那些**耗时长久的任务**，比如
+
+  - **移动机器人到指定位置**：客户端发送目标位置，服务器端执行导航，同时向客户端发送进度和状态反馈，客户端可以随时取消导航任务
+  - **抓取和放置操作**：客户端发送抓取或放置目标，服务器端执行臂的运动和夹取动作
+  - **探测和识别**：服务器端执行探测动作，客户端可以接收实时的探测结果
+  - **路径规划和轨迹执行**：服务器端计算路径，客户端可以实时获取机器人在路径上的进度。
+  - **图像处理**：服务器端处理图像数据，客户端可以周期性地接收处理结果
+
+- Action相比Service的缺点
+
+  - **复杂性**：相对于 Services，Actions 的实现和使用相对复杂，需要定义多个消息类型（目标、反馈、结果），编写服务器端和客户端的逻辑，以及处理状态机等。
+  - 由于 Action 通信需要在多个消息类型之间进行来回交互，因此在**通信开销**方面可能比 Services 稍微更高。
+
+### 1. 话题Topic
 
 对于实时性、周期性的消息，使用topic来传输是最佳的选择。topic是一种点对点的单向通信方式，这里的“点”指的是node。
 
@@ -895,7 +951,7 @@ topic可以同时有多个subscribers，也可以有多个publishers。如/rosou
 
 ### **ROS msg和srv
 
-#### 1.msg,srv简介
+#### msg,srv简介
 
 - **msg**: 
 
@@ -944,7 +1000,7 @@ topic可以同时有多个subscribers，也可以有多个publishers。如/rosou
   
     A,B是request,Sum是response
 
-#### 2.使用msg
+#### 使用msg
 
 - 一些[常见msg](https://sychaichangkun.gitbooks.io/ros-tutorial-icourse163/content/chapter3/3.5.html)
 
@@ -1049,7 +1105,7 @@ topic可以同时有多个subscribers，也可以有多个publishers。如/rosou
      #include <b_packages/Test.h>
      ```
 
-#### 3.使用srv
+#### 使用srv
 
 一些[常见srv](https://sychaichangkun.gitbooks.io/ros-tutorial-icourse163/content/chapter4/4.5.html)
 
@@ -1113,7 +1169,7 @@ topic可以同时有多个subscribers，也可以有多个publishers。如/rosou
   )
   ```
 
-#### 4. 重新编译
+#### 重新编译
 
 添加完msg和srv后需要重新编译
 
@@ -1125,7 +1181,7 @@ $ catkin_make
 $ cd -
 ```
 
-### 2)服务Services
+### 2. 服务Services
 
 区别于Topic是一种单项的异步通信方式，Service通信是双向的，它不仅可以发送消息，同时还会有反馈。
 
@@ -1159,7 +1215,7 @@ $ cd -
 
   - `rosservice uri`：打印服务ROSPRC uri
 
-### 3)参数服务器parameter server
+### **参数服务器parameter server
 
 参数服务器是节点存储参数的地方、用于配置参数，全局共享参数。参数服务器使用互联网传输，在节点管理器中运行，实现整个通信过程。
 
@@ -1254,7 +1310,7 @@ $ cd -
 
    利用api来对参数服务器进行操作
 
-### 4)动作库Action
+### 3. 动作库Action
 
 一些常见的[动作库](https://sychaichangkun.gitbooks.io/ros-tutorial-icourse163/content/chapter4/4.6.html)
 
@@ -1501,7 +1557,7 @@ $ cd -
 - Maintain code with unit tests 单元测试and integration tests组装测试
 
 
-## 五、写一个简单的Publisher 和 Subscriber
+## 五、Topic:写一个简单的Publisher 和 Subscriber
 
 ### 五(一)使用c++来写
 
@@ -1821,11 +1877,11 @@ $ catkin_make
 
 
 
-## 六、写一个简单的Service和Client
+## 六、Servics:写一个简单的Server和Client
 
 ### 六(一)使用C++来写
 
-#### 1. 写一个Service Node
+#### 1. 写一个Server Node
 
 ​	功能：接收2个ints后返回他们的和
 
@@ -1954,7 +2010,7 @@ $ catkin_make
 
 ### 六(二)使用python来写
 
-#### 1. 写一个Service Node
+#### 1. 写一个ServerNode
 
 - Code
 
@@ -2036,9 +2092,327 @@ $ catkin_make
   
   ```
 
+
+## 七、Action:写一个简单的Server和Client
+
+[参考](http://wiki.ros.org/actionlib_tutorials/Tutorials)
+
+### 七(零)创建action message
+
+- 创建一个包actionlib_tutorials:
+
+  ```
+  mkdir -p ~Desktop/catkin_ws/src
+  cd Desktop/catkin_ws/src
+  catkin_create_pkg actionlib_tutorials actionlib message_generation roscpp rospy std_msgs actionlib_msgs
+  ```
+
+- 定义Action Messages(goal,result,feedback)
+
+  - action message由[.action](http://wiki.ros.org/actionlib#:~:text=the%20requested%20scan.-,.action%20File,-The%20action%20specification)文件自动生成，action通信有3个通道：
+
+    1. **Goal：** Goal 通道用于发布目标请求，它表示你希望机器人或系统完成的任务。通常，一个 Goal 会包含任务的一些参数，例如移动到特定位置、执行特定动作等。Goal 通道的消息在发送后，会等待机器人或系统完成任务并发送回应。
+    2. **Result：** Result 通道用于发布任务的结果，它表示任务的完成状态和可能的结果。一旦任务完成，机器人或系统会发布一个 Result 消息，通知客户端任务的结果。Result 是周期性的，一次任务完成后会发送一次，表示整个任务的结果。
+    3. **Feedback：** Feedback 通道用于提供任务的中间反馈信息，它允许客户端获取任务进展的实时信息。例如，如果机器人执行路径规划任务，Feedback 通道可以周期性地发布机器人当前的位置，以便客户端可以实时监测机器人的进度。
+
+  - 在`/home/yang/Desktop/catkin_ws/src/actionlib_tutorials/action`文件夹下创建Fibonacci.action文件，并输入:
+
+    ```
+    #goal definition
+    int32 order
+    ---
+    #result definition
+    int32[] sequence
+    ---
+    #feedback
+    int32[] sequence
+    ```
+
+- 修改CMakeLists.txt
+
+  用于在make构建过程中，自动生成message file.
+
+  在cmake文件中添加下面的1，2，3，4
+
+  ```cmake
+  cmake_minimum_required(VERSION 3.0.2)
+  project(actionlib_tutorials)
   
+  # 1.使用find_package宏来添加actionlib和actionlib_msgs包
+  find_package(catkin REQUIRED COMPONENTS
+      actionlib
+      actionlib_msgs
+      message_generation
+      roscpp
+      rospy
+      std_msgs
+  )
+  
+  # 2.使用add_action_files宏来声明我们想要生成的action
+  add_action_files(
+      DIRECTORY action
+      FILES Fibonacci.action 
+  )
+  
+  # 3.使用generate_messages宏来添加依赖的message包
+  generate_messages(
+      DEPENDENCIES actionlib_msgs std_msgs  # Or other packages containing msgs
+  )
+  
+  # 4.将actionlib_msgs包添加到catkin_package宏
+  catkin_package(
+      CATKIN_DEPENDS actionlib_msgs
+  )
+  
+  
+  ## Specify additional locations of header files
+  ## Your package locations should be listed before other locations
+  include_directories(
+  # include
+      ${catkin_INCLUDE_DIRS}
+  )
+  
+  ```
+
+- 修改xml
+
+  因为是在run time时生成message，所以加入下面这一行
+
+  ```xml
+  <exec_depend>message_generation</exec_depend>
+  ```
+
+- 最后`catkin_make`就可以生成actionfiles了
+
+  ```shell
+  $ cd ../.. # Go back to the top level of your catkin workspace
+  $ catkin_make
+  $ ls devel/share/actionlib_tutorials/msg/
+  FibonacciActionFeedback.msg  FibonacciAction.msg        FibonacciFeedback.msg
+  FibonacciResult.msg          FibonacciActionGoal.msg    FibonacciActionResult.msg  FibonacciGoal.msg
+  $ ls devel/include/actionlib_tutorials/
+  FibonacciActionFeedback.h  FibonacciAction.h        FibonacciFeedback.h  FibonacciResult.h
+  FibonacciActionGoal.h      FibonacciActionResult.h  FibonacciGoal.h
+  ```
+
+### 七(一)使用C++来写
+
+#### 1. 写一个Server
+
+创建actionlib_tutorials/src/fibonacci_server.cpp 
+
+```c++
+#include <ros/ros.h>
+// actionlib/server/simple_action_server.h is the action library used from implementing simple actions.
+#include <actionlib/server/simple_action_server.h>
+// 包含从Fibonacci.action中生成的action message ，该.h文件由FibonacciAction.msg自动生成
+#include <actionlib_tutorials/FibonacciAction.h>
+
+class FibonacciAction
+{
+// protected成员允许派生类访问基类的一些内部状态，同时还限制了这种访问只在派生类内部有效
+protected:
+
+    ros::NodeHandle nh_;
+    // 创建action server
+    actionlib::SimpleActionServer<actionlib_tutorials::FibonacciAction> as_; // NodeHandle instance must be created before this line. Otherwise strange error occurs.
+    std::string action_name_;
+    // 创建feedback和result message
+    actionlib_tutorials::FibonacciFeedback feedback_;
+    actionlib_tutorials::FibonacciResult result_;
+
+public:
+    /*用类的构造函数创造一个名为FibonacciAction的动作服务器（Action Server）
+        as_：上面定义的动作服务器对象
+            nh_：节点句柄（NodeHandle），它是ROS中与节点通信的接口
+            name： 动作服务器的名称，用于标识不同的动作
+            boost::bind(&FibonacciAction::executeCB, this, _1)：创建了一个回调函数，当客户端请求执行动作时，会调用executeCB函数，并且传递一个参数给它
+                boost::bind()：的作用是将一个成员函数（或普通函数）与其参数绑定成一个新的函数对象 
+                &FibonacciAction::executeCB：是一个成员函数指针，表示FibonacciAction类的成员函数executeCB
+                this：指向当前对象（即FibonacciAction对象）的指针
+                _1：是一个占位符，表示在调用这个函数对象时会提供一个参数
+            false：表示不自动启动动作服务器
+        action_name_：存储动作服务器的名称
+    */
+    FibonacciAction(std::string name) :
+    as_(nh_, name, boost::bind(&FibonacciAction::executeCB, this, _1), false),
+    action_name_(name)
+    {   
+        ROS_INFO("Succeed to create action");
+        // 之前在初始化列表中设置了不自动启动，现在通过调用start()来手动启动服务器
+        as_.start();
+    }
+
+    ~FibonacciAction(void){}
+
+    /*回调函数
+        ROS中，动作消息类型的共享指针类型通常是通过将消息类型名称的末尾添加 'ConstPtr' 来定义的。
+        这种方式在内存管理方面更为安全，避免了不必要的复制，同时允许多个对象共享同一数据。
+        这里goal message指针是一个boost共享指针
+    */ 
+    void executeCB(const actionlib_tutorials::FibonacciGoalConstPtr &goal)
+    {
+        // helper variables
+        ros::Rate r(1);
+        bool success = true;
+
+        // push_back the seeds for the fibonacci sequence
+        // 这里的sequence的数据结构类似于 std::vector<int32_t>，但是使用了特定的内存分配器来进行内存管理
+        feedback_.sequence.clear();
+        feedback_.sequence.push_back(0);
+        feedback_.sequence.push_back(1);
+
+        // publish info to the console for the user
+        ROS_INFO("%s: Executing, creating fibonacci sequence of order %i with seeds %i, %i", action_name_.c_str(), goal->order, feedback_.sequence[0], feedback_.sequence[1]);
+
+        // start executing the action
+        for(int i=1; i<=goal->order; i++)
+        {   
+            // action的重要机制：允许client发送cancel命令，来结束当前任务。
+            // 检查clien是否有请求 preempt先占 
+            if (as_.isPreemptRequested() || !ros::ok())
+            {
+            ROS_INFO("%s: Preempted", action_name_.c_str());
+            // set the action state to preempted
+            as_.setPreempted();
+            success = false;
+            break;
+            }
+            // 如果没有请求，就继续算fibonacci数列，也就是前两个数字之和
+            feedback_.sequence.push_back(feedback_.sequence[i] + feedback_.sequence[i-1]);
+            // 将feedback值发送到action的feedback channel
+            // Feedback 通道用于提供任务的中间反馈信息，它允许客户端获取任务进展的实时信息。
+            as_.publishFeedback(feedback_);
+            // this sleep is not necessary, the sequence is computed at 1 Hz for demonstration purposes
+            r.sleep();
+        }
+        // 如果client没有发送取消指令
+        if(success)
+        {   
+            // 最后的结果就是feedback的值
+            result_.sequence = feedback_.sequence;
+            ROS_INFO("%s: Succeeded", action_name_.c_str());
+            // set the action state to succeeded
+            as_.setSucceeded(result_);
+        }
+    }
+
+};
 
 
+int main(int argc, char** argv)
+{   
+    // ros::init()初始化节点，fibonacci为节点名字
+    ros::init(argc, argv, "fibonacci");
+    // 创建action
+    FibonacciAction fibonacci("fibonacci");
+    // 循环运行，提供动作服务，等待client的请求
+    ros::spin();
+
+    return 0;
+}
+```
+
+#### 2. 写一个Client
+
+```c++
+#include <ros/ros.h>
+// actionlib/client/simple_action_client.h is the action library used from implementing simple action clients.
+#include <actionlib/client/simple_action_client.h>
+// terminal_state定义了可能的goal states
+#include <actionlib/client/terminal_state.h>
+// 包含由Fibonacci.action创建的所有action messages
+#include <actionlib_tutorials/FibonacciAction.h>
+
+int main (int argc, char **argv)
+{
+    ros::init(argc, argv, "test_fibonacci");
+
+    // 创建action client，有2个参数
+    // 第一个参数是要连接的action server名字，
+    // 第二个参数是bool值，定义是否自动spin a thread。即是否在创建 Action Client 时启动一个独立的线程来处理事件循环，从而允许你的节点继续执行其他操作
+    actionlib::SimpleActionClient<actionlib_tutorials::FibonacciAction> ac("fibonacci", true);
+
+    ROS_INFO("Waiting for action server to start.");
+    // action server可能不在运行状态，所以先等待action server被启动
+    ac.waitForServer(); //will wait for infinite time
+
+    ROS_INFO("Action server started, sending goal.");
+    // 将goal，这里的20，发送给action server
+    actionlib_tutorials::FibonacciGoal goal;
+    // 注意这里变量名order，和变量类型int32都是在Fibonacci.action中定义的
+    goal.order = 20;
+    ac.sendGoal(goal);
+
+    // wait for the action to return
+    // 这里设置了，如果等待30S都没回复就认为goal失败了。
+    bool finished_before_timeout = ac.waitForResult(ros::Duration(30.0));
+
+    if (finished_before_timeout)
+    {
+        actionlib::SimpleClientGoalState state = ac.getState();
+        ROS_INFO("Action finished: %s",state.toString().c_str());
+    }
+    else
+    {
+        // 如果失败了，取消当前任务
+        ROS_INFO("Action did not finish before the time out.");
+        ac.cancelGoal();
+    }
+
+    //exit
+    return 0;
+}
+```
+
+
+
+### 七(二)使用python来写
+
+### 七(三)编译和运行
+
+在七(零)的cmake基础上修改cmake为：
+
+```cmake
+cmake_minimum_required(VERSION 2.8.3)
+project(actionlib_tutorials)
+
+find_package(catkin REQUIRED COMPONENTS roscpp actionlib actionlib_msgs)
+find_package(Boost REQUIRED COMPONENTS system)
+
+add_action_files(
+  DIRECTORY action
+  FILES Fibonacci.action
+)
+
+generate_messages(
+  DEPENDENCIES actionlib_msgs std_msgs
+)
+
+catkin_package(
+  CATKIN_DEPENDS actionlib_msgs
+)
+
+include_directories(include ${catkin_INCLUDE_DIRS} ${Boost_INCLUDE_DIRS})
+
+add_executable(fibonacci_server src/fibonacci_server.cpp)
+
+target_link_libraries(
+  fibonacci_server
+  ${catkin_LIBRARIES}
+)
+
+add_dependencies(
+  fibonacci_server
+  ${actionlib_tutorials_EXPORTED_TARGETS}
+)
+```
+
+- 创建4个terminal，分别运行
+  1. `roscore`
+  2. `rosrun actionlib_tutorials fibonacci_server`
+  3. `rosrun actionlib_tutorials fibonacci_client`
+  4. `rqt_graph`
 
 # 二、ROS进阶
 
