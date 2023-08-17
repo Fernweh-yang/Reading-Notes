@@ -750,4 +750,99 @@ int main(int argc,char *argv[])// 等于 int main(int argc,char **argv);
     - 此时就要用`traj_Car = new TrajectoryIteratorCartesian(& traj);`来实例化了
     - 因为此时需要的是一个指针的地址
     
-    
+
+## 6. 智能指针
+
+### 6.1 什么是智能指针
+
+- 智能指针（Smart Pointer）是一种用于管理动态分配的资源（通常是内存）的 C++ 技术，旨在**简化资源的生命周期管理**，从而**减少内存泄漏和资源管理错误的风险**。
+- 智能指针是一种封装了原始指针的c++类，它们提供了自动化资源管理的功能，**避免了手动释放内存或资源的繁琐工作**。
+- 智能指针是在 [<memory>](https://learn.microsoft.com/zh-cn/cpp/standard-library/memory?view=msvc-170) 头文件中的 `std` 命名空间中定义的
+- 主要目标：
+  - **自动化资源释放：** 智能指针会在适当的时候自动释放其所管理的资源，从而避免内存泄漏和资源泄漏。
+  - **防止悬挂指针：** 通过合适的生命周期管理，智能指针可以防止悬挂指针（指向已释放内存的指针）的情况。
+  - **提高代码安全性：** 由于智能指针负责管理资源，可以减少人为错误，从而提高代码的安全性和可维护性。
+
+- 三种智能指针类型：
+  - `std::unique_ptr`：独占所有权的智能指针，用于确保在特定时间只有一个指针指向资源。
+  - `std::shared_ptr`：允许多个指针共享资源所有权的智能指针，使用引用计数来管理资源的生命周期。
+  - `std::weak_ptr`：用于避免循环引用和解决 `std::shared_ptr` 可能的资源泄漏问题。
+
+### 6.2 和传统指针的对比
+
+```c++
+// 传统指针：
+void UseRawPointer()
+{
+    // Using a raw pointer -- not recommended.
+    Song* pSong = new Song(L"Nothing on You", L"Bruno Mars"); 
+
+    // Use pSong...
+
+    // Don't forget to delete!
+    delete pSong;   
+}
+
+
+// 智能指针
+void UseSmartPointer()
+{
+    // Declare a smart pointer on stack and pass it the raw pointer.
+    unique_ptr<Song> song2(new Song(L"Nothing on You", L"Bruno Mars"));
+
+    // Use song2...
+    wstring s = song2->duration_;
+    //...
+
+} // song2 is deleted automatically here.
+```
+
+
+
+### 6.3 使用例子
+
+演示了如何使用 C++ 标准库中的 `unique_ptr` 智能指针类型将指针封装到大型对象。
+
+```c++
+class LargeObject
+{
+public:
+    void DoSomething(){}
+};
+
+void ProcessLargeObject(const LargeObject& lo){}
+void SmartPointerDemo()
+{    
+    // 将智能指针声明为一个自动（局部）变量pLarge。 
+    // 不要对智能指针本身使用 new 或 malloc 表达式。
+    // 在类型参数中即<>内，指定封装指针的指向类型：<LargeObject>
+    // 在智能指针构造函数中将原始指针传递至 new 对象：(new LargeObject())
+    // Create the object and pass it to a smart pointer
+    std::unique_ptr<LargeObject> pLarge(new LargeObject());
+
+    // 智能指针使用重载的 -> 和 * 运算符访问对象
+    //Call a method on the object
+    pLarge->DoSomething();
+    // Pass a reference to a method.
+    ProcessLargeObject(*pLarge);
+
+} //pLarge is deleted automatically when function block goes out of scope.
+
+void SmartPointerDemo2()
+{
+    // Create the object and pass it to a smart pointer
+    std::unique_ptr<LargeObject> pLarge(new LargeObject());
+
+    //Call a method on the object
+    pLarge->DoSomething();
+	
+   	// 允许智能指针删除对象
+    // Free the memory before we exit function block.
+    pLarge.reset();
+
+    // Do some other work...
+}
+```
+
+
+
