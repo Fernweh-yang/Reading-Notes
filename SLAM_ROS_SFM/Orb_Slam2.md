@@ -2,7 +2,7 @@
 
 ## 0. ORB-Slam2框架
 
-- 出自论文1
+- 出自论文
 
 ![](https://github.com/Fernweh-yang/Reading-Notes/blob/main/%E7%AC%94%E8%AE%B0%E9%85%8D%E5%A5%97%E5%9B%BE%E7%89%87/slam/orb-slam%E6%A1%86%E6%9E%B6.png?raw=true)
 
@@ -15,17 +15,18 @@
 1. 环境
 
    ```
-   openCV   3.4.18
-   Pangolin 0.6
-   ROs      noteic
+   openCV   4.7.0
+   Pangolin 0.8
+   ros      noteic
    ubuntu   20
    ```
 
    - 检查opencv是否安装成功
 
      ```
-     cd opencv-3.4.18/samples/cpp/example_cmake
-     cmake .
+     cd opencv-4.7.0/samples/cpp/example_cmake
+     mkdir build && cd build
+     cmake ..
      make
      ./opencv_example
      ```
@@ -34,25 +35,66 @@
 
      ```
      cd Pangolin/examples/HelloPangolin
-     cmake .
+     mkdir build && cd build
+     cmake ..
      make
      ./HelloPangolin
+     ```
+     
+   - VSCode环境
+
+     c_cpp_properties.json
+
+     ```json
+     {
+         "configurations": [
+             {
+                 "name": "Linux",
+                 "includePath": [
+                     "${workspaceFolder}/**",
+                     "/usr/include/opencv4/**",
+                     "/usr/include/eigen3"
+     
+                 ],
+                 "defines": [],
+                 "compilerPath": "/usr/bin/gcc",
+                 "cStandard": "c17",
+                 "cppStandard": "gnu++14",
+                 "intelliSenseMode": "linux-gcc-x64"
+             }
+         ],
+         "version": 4
+     }
      ```
 
 2. 下载orb-slam2后修改
 
-   1. ORB_SLAM2/include/system.h:添加`#include<unistd.h>`
+   1. 修改CMakeLists，和Thirdparty/DBow2的CMakeLists
 
-   2. ORB_SLAM2/include/LoopClosing.h:
-
+      ```cmake
+       # 原本为：find_package(OpenCV 3.0 QUIET)
+       find_package(OpenCV 4.7 QUIET)
+       if(NOT OpenCV_FOUND)
+          find_package(OpenCV 2.4.3 QUIET)
+          if(NOT OpenCV_FOUND)
+             message(FATAL_ERROR "OpenCV > 2.4.3 not found.")
+          endif()
+       endif()
       ```
+
+   2. ORB_SLAM2/include/system.h:添加`#include<unistd.h>`
+
+   3. ORB_SLAM2/include/LoopClosing.h:
+
+      ```c++
       typedef map<KeyFrame*,g2o::Sim3,std::less<KeyFrame*>,
               Eigen::aligned_allocator<std::pair<const KeyFrame*, g2o::Sim3> > > KeyFrameAndPose;
       //改为：
       typedef map<KeyFrame*,g2o::Sim3,std::less<KeyFrame*>,
               Eigen::aligned_allocator<std::pair<KeyFrame *const, g2o::Sim3> > > KeyFrameAndPose;
-      
       ```
+
+   4. 
 
 3. 编译
 
