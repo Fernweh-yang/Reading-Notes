@@ -3322,6 +3322,554 @@ int main(int argc, char** argv){
   6. 编译代码
   7. 为参数编写配置文件
 
+### 3.1 编写控制器的c++代码以及头文件
+
+#### traj_controller.h
+
+```cpp
+// Copyright (c) 2017 Franka Emika GmbH
+// Use of this source code is governed by the Apache-2.0 license, see LICENSE
+#pragma once
+
+#include <string>
+#include <vector>
+
+// 自定义控制器均来自于controller_interface::MultiInterfaceController类，允许至多声明4个接口。
+#include <controller_interface/multi_interface_controller.h>
+#include <franka_hw/franka_state_interface.h>
+#include <hardware_interface/joint_command_interface.h>
+#include <hardware_interface/robot_hw.h>
+#include <ros/node_handle.h>
+#include <ros/time.h>
+
+#include <dqrobotics/DQ.h>
+#include <dqrobotics/robots/FrankaEmikaPandaRobot.h>
+
+#include <traj_controller/franka_robot.h>
+
+#include <traj_controller/trajectory_planning.h> // 自定义
+#include <traj_controller/Trajectory.h>
+
+
+DQ_robotics::DQ homogeneousTfArray2DQ(std::array<double,16> &pose);
+
+namespace traj_controller {
+
+class JointVelocityController : public controller_interface::MultiInterfaceController<
+                                           hardware_interface::VelocityJointInterface,
+                                           franka_hw::FrankaStateInterface> {
+ public:
+  // init()用于参数初始化以及生成接口和句柄，必须要有
+  bool init(hardware_interface::RobotHW* robot_hardware, ros::NodeHandle& node_handle) override;
+  // update()包含控制器在每个控制周期执行的代码,必须要有
+  void update(const ros::Time&, const ros::Duration& period) override;
+  // starting和stopping可以选择不写
+  void starting(const ros::Time&) override;
+  void stopping(const ros::Time&) override;
+
+
+  // DQ_robotics::DQ_SerialManipulatorMDH kinematics();
+
+ private:
+  hardware_interface::VelocityJointInterface* velocity_joint_interface_;
+  std::vector<hardware_interface::JointHandle> velocity_joint_handles_;
+  ros::Duration elapsed_time_;
+
+
+  // ****************** edit start ******************
+  // 下面的变量都是根据具体任务慢慢加进来,不需要看,主要是上面
+  // *获取机械臂状态
+  std::unique_ptr<franka_hw::FrankaStateHandle> state_handle_;
+  
+  // *轨迹规划相关
+  // PolynomialTrajectory* traj;
+  LinearTrajectory* traj;
+  TrajectoryIteratorCartesian* traj_Car;
+
+  Eigen::Index iteration_index;
+
+  double t = 0;
+  double speed_factor = 0.5; 
+  Vector7d t_s;   // 开始时刻
+  Vector7d q_s;   // 开始时刻关节角度
+  Vector7d v_s;   // 开始时刻速度
+  Vector7d a_s;   // 开始时刻加速度
+
+  Vector7d t_f;   // 结束时间
+  Vector7d q_f;   // 结束时关节角度，即目标点
+  Vector7d v_f;   // 结束时速度
+  Vector7d a_f;   // 结束时加速度
+
+  // *dq_robotics相关变量
+  DQ_robotics::DQ x,xd;
+  MatrixXd J,J_pinv,JJ;
+  Vector7d u;
+  // DQ_robotics::DQ_SerialManipulatorMDH fep = DQ_robotics::FrankaRobot::kinematics();
+  DQ_robotics::DQ_SerialManipulatorMDH fep = DQ_robotics::FrankaEmikaPandaRobot::kinematics();
+  RowVector7d goal,q_min,q_max,q_c,q;
+  RowVector8d e;
+  franka::RobotState robot_state;
+  
+  double e_norm,e_norm_old;
+  int flag;
+  // ****************** edit end ******************
+};
+
+}  // namespace traj_controller
+
+```
+
+#### traj_controller.cpp
+
+要变成ros可以找到的controller,需要将这个文件变成一个控制器插件plugin
+
+具体参见代码最底部
+
+```cpp
+// Copyright (c) 2017 Franka Emika GmbH
+// Use of this source code is governed by the Apache-2.0 license, see LICENSE
+#include <traj_controller/traj_controller.h>
+
+#include <cmath>
+
+#include <controller_interface/controller_base.h>
+#include <hardware_interface/hardware_interface.h>
+#include <hardware_interface/joint_command_interface.h>
+#include <pluginlib/class_list_macros.h>
+#include <ros/ros.h>
+
+// some parameters for the controller
+double gain = -1.5;
+double d = 0.1;
+double k = 0.1;
+
+// ***************** 变换矩阵转DQ ***************** 
+DQ_robotics::DQ homogeneousTfArray2DQ(std::array<double,16> &pose){
+    Eigen::Matrix3d rotationMatrixEigen;
+    DQ_robotics::DQ r,p,x;
+    rotationMatrixEigen << pose[0], pose[4], pose[8],
+                           pose[1], pose[5], pose[9],
+                           pose[2], pose[6], pose[10];    
+    Eigen::Quaterniond quaternion(rotationMatrixEigen);
+    r = DQ_robotics::DQ(quaternion.w(),quaternion.x(),quaternion.y(),quaternion.z());
+    p = pose[12]*DQ_robotics::i_ + pose[13]*DQ_robotics::j_ + pose[14]*DQ_robotics::k_;
+    x = r + DQ_robotics::E_*0.5*p*r;
+
+    return x;
+}
+
+// ***************** 求矩阵的伪逆 ***************** 
+template<typename _Matrix_Type_>
+_Matrix_Type_ pseudoInverse(const _Matrix_Type_ &a, double epsilon = std::numeric_limits<double>::epsilon())
+{
+    // Eigen::JacobiSVD< _Matrix_Type_ > svd(a ,Eigen::ComputeFullU | Eigen::ComputeFullV); // For a square matrix
+    Eigen::JacobiSVD< _Matrix_Type_ > svd(a ,Eigen::ComputeThinU | Eigen::ComputeThinV);    // For a non-square matrix
+    double tolerance =epsilon * std::max(a.cols(), a.rows()) *svd.singularValues().array().abs()(0);
+    return svd.matrixV() *  (svd.singularValues().array().abs() > tolerance).select(svd.singularValues().array().inverse(), 0).matrix().asDiagonal() * svd.matrixU().adjoint();
+}
+
+// ***************** 控制器 ***************** 
+namespace traj_controller {
+    bool JointVelocityController::init(hardware_interface::RobotHW* robot_hardware,ros::NodeHandle& node_handle){
+        velocity_joint_interface_ = robot_hardware->get<hardware_interface::VelocityJointInterface>();
+        if (velocity_joint_interface_ == nullptr) {
+            ROS_ERROR(
+            "JointVelocityController: Error getting velocity joint interface from hardware!");
+            return false;
+        }
+
+        std::string arm_id;
+        if (!node_handle.getParam("arm_id", arm_id)) {
+            ROS_ERROR("JointVelocityController: Could not get parameter arm_id");
+            return false;
+        }
+
+        std::vector<std::string> joint_names;
+        if (!node_handle.getParam("joint_names", joint_names)) {
+            ROS_ERROR("JointVelocityController: Could not parse joint names");
+        }
+        if (joint_names.size() != 7) {
+            ROS_ERROR_STREAM("JointVelocityController: Wrong number of joint names, got "<< joint_names.size() << " instead of 7 names!");
+            return false;
+        }
+        velocity_joint_handles_.resize(7);
+        for (size_t i = 0; i < 7; ++i) {
+            try {
+                velocity_joint_handles_[i] = velocity_joint_interface_->getHandle(joint_names[i]);
+            }catch(const hardware_interface::HardwareInterfaceException& ex) {
+                ROS_ERROR_STREAM("JointVelocityController: Exception getting joint handles: " << ex.what());
+                return false;
+            }
+        }
+
+        auto state_interface = robot_hardware->get<franka_hw::FrankaStateInterface>();
+        if (state_interface == nullptr) {
+            ROS_ERROR("JointVelocityController: Could not get state interface from hardware");
+            return false;
+        }
+
+        try {
+            //**************** edit start ****************
+            state_handle_ = std::make_unique<franka_hw::FrankaStateHandle>(state_interface->getHandle(arm_id + "_robot"));
+            robot_state = state_handle_->getRobotState(); //get robotstate
+            //**************** edit end ****************
+            // auto state_handle = state_interface->getHandle(arm_id + "_robot");
+            // std::array<double, 7> q_start{{0, -M_PI_4, 0, -3 * M_PI_4, 0, M_PI_2, M_PI_4}};
+            // for (size_t i = 0; i < q_start.size(); i++) {
+            //   if (std::abs(state_handle.getRobotState().q_d[i] - q_start[i]) > 0.1) {
+            //     ROS_ERROR_STREAM(
+            //         "JointVelocityController: Robot is not in the expected starting position for "
+            //         "running this example. Run `roslaunch traj_controller move_to_start.launch "
+            //         "robot_ip:=<robot-ip> load_gripper:=<has-attached-gripper>` first.");
+            //     return false;
+            //   }
+            // }
+        } catch (const hardware_interface::HardwareInterfaceException& e) {
+            ROS_ERROR_STREAM(
+            "JointVelocityController: Exception getting state handle: " << e.what());
+            return false;
+        }
+
+        //**************** edit start ****************
+        // *读取目标下的joint space
+        ROS_INFO_STREAM("xd before assigment:"<<xd);
+        std::vector<double> joint_goal;
+        if(node_handle.getParam("joint_goal",joint_goal)||joint_goal.size()==7){
+            goal = Map<RowVector7d>(joint_goal.data(),joint_goal.size());
+            ROS_INFO_STREAM("goal:"<<goal);
+        }else{
+            ROS_ERROR("JointVelocityController: Could not get parameter joint_goal");
+            // ROS_INFO_STREAM("Jointgoal:"<<joint_goal);
+            return false;
+        }
+        xd = fep.fkm(goal); //不能放到starting里，否则控制防盗器会挂掉
+        ROS_INFO_STREAM("xd after assignment:"<<xd);
+
+        // ! 用于轨迹规划>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+        // *创建轨迹(运用motion profile)
+        // robot_state = state_handle_->getRobotState(); //get robotstate
+
+        // std::array<double, 16> T_end_c;     //读取目标EE位姿
+        // std::vector<double> target_pose;
+        // if(node_handle.getParam("target_pose",target_pose) && target_pose.size()==16){
+        //     for(int i=0; i<16; i++){
+        //         T_end_c[i] = target_pose[i];
+        //         // ROS_INFO_STREAM("T_end_c"<<i <<":"<<T_end_c[i]);
+        //     }       
+        // }else{
+        //     ROS_ERROR("JointVelocityController: Could not get parameter T_end_c");
+        //     return false;
+        // }
+
+        // std::array<double, 16> T_start_c = robot_state.O_T_EE_c;    //读取当前EE位姿
+
+        // Vector6d initial_pose = homogeneousTfArray2PoseVec(T_start_c);  // 将位姿转为(3 translations, 3 RPY rotations) 
+        // Vector6d end_pose = homogeneousTfArray2PoseVec(T_end_c);
+        // traj = new LinearTrajectory(initial_pose, end_pose, 0.05,0.5,1.e-3);
+        // traj_Car = new TrajectoryIteratorCartesian(*traj);
+        // ! 用于轨迹规划<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+
+        //**************** edit end ****************
+        return true;
+    }
+
+    void JointVelocityController::starting(const ros::Time& /* time */) {
+        elapsed_time_ = ros::Duration(0.0);
+        q_min << -2.8973,   -1.7628,   -2.8973,   -3.0718,   -2.8973,   -0.0175,   -2.8973;
+        q_max <<  2.8973,    1.7628,    2.8973,   -0.0698,    2.8973,    3.7525,    2.8973;
+        q_c = 0.5*(q_min+q_max);
+        e << 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0; //error
+
+        flag = 0;
+        e_norm =0;
+        e_norm_old=0;
+    }
+
+    void JointVelocityController::update(const ros::Time&,const ros::Duration& period) {
+
+        // ! 用于轨迹规划>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+        // // * calculate the error between EE's target pose and EE's current pose
+        // std::array<double, 16> targetPose = traj_Car->getCartesianPose();
+        // std::array<double, 16> currentPose = robot_state.O_T_EE_c;    
+        // x = homogeneousTfArray2DQ(currentPose);
+        // xd = homogeneousTfArray2DQ(targetPose);
+        // e = DQ_robotics::vec8(x - xd);  
+
+        // // * calculate the norm of the error
+        // e_norm_old = e_norm;
+        // e_norm = e.norm();
+        // ! 用于轨迹规划<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+
+        // * calculate the jacobian
+        robot_state = state_handle_->getRobotState(); //get robotstate
+        for(int i=0; i<7; i++){
+            q.coeffRef(i)  = robot_state.q[i];
+        }
+        // ! 不用轨迹**********
+        x = fep.fkm(q);
+        e = DQ_robotics::vec8(x-xd);
+        e_norm = e.norm();
+        // ! 不用轨迹**********
+        J=fep.pose_jacobian(q);                                 // 8x7
+        J_pinv = pseudoInverse(J);                              // 7x8
+        JJ = J_pinv*J;                                          // 7x7
+        MatrixXd I = MatrixXd::Identity(JJ.rows(),JJ.cols());   // 7X7
+        MatrixXd N = I-JJ;                                      // 7X7
+
+        // * calculatet the controller
+        k=0.6;
+        u = -J_pinv*k*e.transpose()+N*d*(q_c.transpose()-q.transpose()); //7x1
+        // u = -J_pinv*k*e.transpose();
+        if(e_norm<0.001) u.setZero(); 
+
+        // * output the command
+        for (int i=0; i<7; i++) {
+            velocity_joint_handles_[i].setCommand(u[i]);
+        }
+
+        // * iter step +1
+        // traj_Car->step();
+
+        // *** debug info ***
+        // if(flag<100){
+        //     // ROS_INFO_STREAM("iteration:"<<flag );
+        //     // ROS_INFO_STREAM("x:" <<x);
+        //     // ROS_INFO_STREAM("xd:" <<xd);
+        //     // ROS_INFO_STREAM("q:"<<q);
+        //     ROS_INFO_STREAM("e:"<<e);
+        //     ROS_INFO_STREAM("e_norm:"<<e_norm);
+        //     ROS_INFO_STREAM("e_norm - e_norm_old:"<<e_norm - e_norm_old);
+        //     flag++;
+        // }
+        
+    }
+
+    void JointVelocityController::stopping(const ros::Time& /*time*/) {
+        // WARNING: DO NOT SEND ZERO VELOCITIES HERE AS IN CASE OF ABORTING DURING MOTION
+        // A JUMP TO ZERO WILL BE COMMANDED PUTTING HIGH LOADS ON THE ROBOT. LET THE DEFAULT
+        // BUILT-IN STOPPING BEHAVIOR SLOW DOWN THE ROBOT.
+    }
+
+}  // namespace traj_controller
+
+// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+// 注册为一个插件
+// 注意这里的控制器类型和下面的xml文件需要保持一致
+PLUGINLIB_EXPORT_CLASS(traj_controller::JointVelocityController,
+          controller_interface::ControllerBase)
+
+```
+
+### 3.2 在XML文件中定义插件
+
+在src文件夹下的traj_controller.xml中添加如下代码
+
+```xml
+<library path="lib/libtraj_controller">
+    <class name="traj_controller/JointVelocityController" type="traj_controller::JointVelocityController" base_class_type="controller_interface::ControllerBase">
+      <description>
+        manipulability tracking with quadratic programming
+      </description>
+    </class>
+  </library>
+  
+  
+```
+
+### 3.3 更新package xml发布插件
+
+在src文件夹下的package.xml中添加如下代码
+
+- 注意控制接口的名字,要和上面xml文件名一致
+
+```xml
+<?xml version="1.0"?>
+<package format="2">
+  <name>traj_controller</name>
+  <version>0.0.0</version>
+  <description>The traj_controller package</description>
+
+  <maintainer email="xudashuai512@gmail.com">yang</maintainer>
+
+  <license>TODO</license>
+
+ 
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <build_depend>message_generation</build_depend>
+  <build_depend>eigen</build_depend>
+
+  <build_export_depend>message_runtime</build_export_depend>
+
+  <depend>controller_interface</depend>
+  <depend>dynamic_reconfigure</depend>
+  <depend>eigen_conversions</depend>
+  <depend>franka_hw</depend>
+  <depend>franka_gripper</depend>
+  <depend>geometry_msgs</depend>
+  <depend>hardware_interface</depend>
+  <depend>joint_limits_interface</depend>
+  <depend>tf</depend>
+  <depend>tf_conversions</depend>
+  <depend>libfranka</depend>
+  <depend>pluginlib</depend>
+  <depend>realtime_tools</depend>
+  <depend>roscpp</depend>
+  <depend>urdf</depend>
+  <depend>visualization_msgs</depend>
+
+  <exec_depend>franka_control</exec_depend>
+  <exec_depend>franka_description</exec_depend>
+  <exec_depend>message_runtime</exec_depend>
+  <exec_depend>rospy</exec_depend>
+
+  <!-- The export tag contains other, unspecified, tags -->
+  <export>
+    <!-- Other tools can request additional information be placed here -->
+    <controller_interface plugin="${prefix}/traj_controller.xml"/>
+  </export>
+</package>
+
+```
+
+### 3.4 编写CMakeLists.txt
+
+```c++
+cmake_minimum_required(VERSION 3.0.2)
+project(traj_controller)
+
+set(CMAKE_BUILD_TYPE Release)
+set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+## Find catkin macros and libraries
+## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
+## is used, also find other catkin packages
+find_package(catkin REQUIRED COMPONENTS
+  franka_gripper
+  controller_interface
+  franka_hw
+  geometry_msgs
+  hardware_interface
+  pluginlib
+  realtime_tools
+  roscpp
+  rospy
+  std_msgs
+)
+
+find_package(Eigen3 REQUIRED)
+find_package(Franka 0.9.0 QUIET)
+if(NOT Franka_FOUND)
+  find_package(Franka 0.8.0 REQUIRED)
+endif()
+
+catkin_package(
+  INCLUDE_DIRS include
+  LIBRARIES traj_controller
+  CATKIN_DEPENDS
+    controller_interface
+    eigen_conversions
+    franka_hw
+    franka_gripper
+    geometry_msgs
+    hardware_interface
+    message_runtime
+    pluginlib
+    realtime_tools
+    roscpp
+  DEPENDS Franka
+)
+
+
+include_directories(
+  include
+  ${catkin_INCLUDE_DIRS}
+  ${EIGEN3_INCLUDE_DIR}
+)
+
+# 因为controller什么的都是被调用的,真正的node是franka_control
+# 所以所有的代码都编译为库
+add_library(traj_controller
+  src/franka_robot.cpp
+  src/MotionProfile.cpp
+  src/Path.cpp
+  src/Trajectory.cpp
+  src/trajectory_planning.cpp
+  src/traj_controller.cpp
+)
+
+target_link_libraries(traj_controller
+  ${catkin_LIBRARIES}
+  ${Franka_LIBRARIES}
+  dqrobotics
+)
+
+target_include_directories(traj_controller SYSTEM PUBLIC
+  include
+  ${Franka_INCLUDE_DIRS}
+  ${EIGEN3_INCLUDE_DIRS}
+  ${catkin_INCLUDE_DIRS}
+)
+```
+
+### 3.5 编写launch file
+
+traj_controller.launch
+
+```xml
+<?xml version="1.0" ?>
+<launch>
+  <arg name="robot" default="panda" doc="choose your robot. Possible values: [panda, fr3]"/>
+  <arg name="arm_id" default="$(arg robot)" />
+  <arg name="robot_ip" default="192.168.3.127" />
+  <!-- franka_control.launch：
+      1.franka_gripper包下的franka_gripper_node节点：用于连接gripper和读取gripper的状态
+      2.franka_control包下的franka_control_node：连接机器人并调用我们实现的controller的update()
+  -->
+  <include file="$(find franka_control)/launch/franka_control.launch" pass_all_args="true"/>
+
+  <rosparam command="load" file="$(find traj_controller)/config/controllers.yaml" subst_value="true" />
+  <!-- 选择我们要用的controller，这里定义的update()会被上面的franka_control_node不停的循环调用 -->
+  <node name="controller_spawner" pkg="controller_manager" type="spawner" respawn="false" output="screen"  args="traj_controller"/>
+  <!-- <node pkg="rviz" type="rviz" output="screen" name="rviz" args="-d $(find franka_example_controllers)/launch/robot.rviz -f $(arg arm_id)_link0 \-\-splash-screen $(find franka_visualization)/splash.png"/> -->
+</launch>
+
+```
+
+### 3.6 为参数编写配置文件
+
+编写上面launch file中读取的配置文件controllers.yaml
+
+```yaml
+traj_controller:
+    type: traj_controller/JointVelocityController
+    arm_id: $(arg arm_id)
+    joint_names:
+        - $(arg arm_id)_joint1
+        - $(arg arm_id)_joint2
+        - $(arg arm_id)_joint3
+        - $(arg arm_id)_joint4
+        - $(arg arm_id)_joint5
+        - $(arg arm_id)_joint6
+        - $(arg arm_id)_joint7
+    # joint_goal:
+    #       - 0.560433 
+    #       - 0.0209584 
+    #       - 0.102085 
+    #       - -1.97221 
+    #       - -0.00222753 
+    #       - 2.04029 
+    #       - 1.55723
+    joint_goal : [-0.208641,0.0507064,-0.25078,-2.01031,0.0316269,2.09578,0.330997]
+    # target_pose : [0.994973,-0.094776,-0.0320448,0,-0.0944306,-0.995448,0.0121307,0,-0.0330493,-0.00904386,-0.999413,0,0.487364,0.164401,0.2741,1]
+    # target_pose : [0.991908,-0.126669,0.00731729,0,-0.125947,-0.989954,-0.0641102,0,0.0153648,0.062671,-0.997916,0,0.498039,0.25038,0.344644,1]
+    target_pose : [0.994282,0.0921455,0.0537907,0,0.0882803,-0.993603,0.0702838,0,0.0599241,-0.0651345,-0.996076,0,0.355753,-0.208245,0.421174,1]
+    
+```
+
+
+
 # 五、URDF，SRDF和 Xacro
 
 ## 1 URDF
