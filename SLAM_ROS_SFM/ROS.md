@@ -2214,7 +2214,7 @@ class FibonacciAction
 protected:
 
     ros::NodeHandle nh_;
-    // 创建action server
+    // *********************** 创建action server ***********************
     actionlib::SimpleActionServer<actionlib_tutorials::FibonacciAction> as_; // NodeHandle instance must be created before this line. Otherwise strange error occurs.
     std::string action_name_;
     // 创建feedback和result message
@@ -2222,7 +2222,9 @@ protected:
     actionlib_tutorials::FibonacciResult result_;
 
 public:
+    // *********************** FibonacciAction动作类的构造函数 ***********************
     /*用类的构造函数创造一个名为FibonacciAction的动作服务器（Action Server）
+    成员函数初始化：
         as_：上面定义的动作服务器对象
             nh_：节点句柄（NodeHandle），它是ROS中与节点通信的接口
             name： 动作服务器的名称，用于标识不同的动作
@@ -2234,17 +2236,21 @@ public:
             false：表示不自动启动动作服务器
         action_name_：存储动作服务器的名称
     */
-    FibonacciAction(std::string name) :
-    as_(nh_, name, boost::bind(&FibonacciAction::executeCB, this, _1), false),
-    action_name_(name)
+    FibonacciAction(std::string name) : 
+        as_(nh_, name, boost::bind(&FibonacciAction::executeCB, this, _1), false), 
+        action_name_(name)
     {   
         ROS_INFO("Succeed to create action");
-        // 之前在初始化列表中设置了不自动启动，现在通过调用start()来手动启动服务器
+            
+        // ！！！！之前在初始化列表中设置了不自动启动，现在通过调用start()来手动启动服务器！！！！
+        // 这之后action server就对外提供服务了
         as_.start();
     }
 
+    // *********************** FibonacciAction动作类的析构函数 ***********************
     ~FibonacciAction(void){}
 
+    // *********************** FibonacciAction动作类的回调函数 ***********************
     /*回调函数
         ROS中，动作消息类型的共享指针类型通常是通过将消息类型名称的末尾添加 'ConstPtr' 来定义的。
         这种方式在内存管理方面更为安全，避免了不必要的复制，同时允许多个对象共享同一数据。
