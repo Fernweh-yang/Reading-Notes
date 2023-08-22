@@ -930,3 +930,91 @@ traj_controller:
     
 ```
 
+
+
+## 2. 使用action来控制爪子
+
+### 2.1 action server部分
+
+由franka_ros自带的`franka_gripper`包提供爪子的action server
+
+- 运行：
+
+  ```
+  roslaunch franka_gripper franka_gripper.launch robot_ip:=192.168.3.127
+  ```
+
+### 2.2 action client部分
+
+- 一个简单的移动爪子例子
+
+  ```c++
+  #include <franka/gripper.h>
+  #include <franka_example_controllers/teleop_gripper_paramConfig.h>
+  #include <franka_gripper/GraspAction.h>
+  #include <franka_gripper/HomingAction.h>
+  #include <franka_gripper/MoveAction.h>
+  #include <franka_gripper/StopAction.h>
+  
+  #include <actionlib/client/simple_action_client.h>
+  #include <ros/init.h>
+  #include <ros/node_handle.h>
+  
+  
+  
+  
+  int main(int argc, char** argv){
+    ros::init(argc, argv, "teleop_gripper_node");
+    actionlib::SimpleActionClient<franka_gripper::GraspAction> grasp_client("/franka_gripper/grasp",true);
+    actionlib::SimpleActionClient<franka_gripper::HomingAction> homing_client("/franka_gripper/homing",true);
+    actionlib::SimpleActionClient<franka_gripper::MoveAction> move_client("/franka_gripper/move",true);
+    actionlib::SimpleActionClient<franka_gripper::StopAction> stop_client("/franka_gripper/stop",true);
+  
+    // *********************** grasp ***********************
+    // ROS_INFO("Waiting for action server to start.");
+    // grasp_client.waitForServer();
+    // stop_client.waitForServer();
+    // ROS_INFO("Action server started, sending goal.");
+    // // Grasp object
+    // franka_gripper::GraspGoal grasp_goal;
+    // // grap action的goal
+    // grasp_goal.force = 40;  //N
+    // grasp_goal.speed = 0.3; ///m/s
+    // grasp_goal.epsilon.inner = 0.005; //m
+    // grasp_goal.epsilon.outer = 0.005; //m
+  
+    // grasp_client.sendGoal(grasp_goal);
+    // if (grasp_client.waitForResult(ros::Duration(5.0))) {
+    //   ROS_INFO("teleop_gripper_node: GraspAction was successful.");
+    // } else {
+    //   ROS_INFO("teleop_gripper_node: GraspAction was not successful.");
+    //   stop_client.sendGoal(franka_gripper::StopGoal());
+    // }
+  
+    // *********************** move ***********************
+    ROS_INFO("Waiting for action server to start.");
+    move_client.waitForServer();
+    stop_client.waitForServer();
+    ROS_INFO("Action server started, sending goal.");
+    // Open gripper
+      franka_gripper::MoveGoal move_goal;
+      move_goal.speed = 0.1;  // m/s
+      move_goal.width = 0.05; // m
+      move_client.sendGoal(move_goal);
+      if (move_client.waitForResult(ros::Duration(5.0))) {
+        ROS_INFO("teleop_gripper_node: MoveAction was successful.");
+      } else {
+        ROS_ERROR("teleop_gripper_node: MoveAction was not successful.");
+        stop_client.sendGoal(franka_gripper::StopGoal());
+      }
+  }
+  ```
+
+- 运行:
+
+  ```
+  rosrun franka_example_controllers teleop_gripper_node 
+  ```
+
+  
+
