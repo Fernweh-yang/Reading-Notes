@@ -505,9 +505,28 @@ got push origin dev					# 不想关联远程分支的话，就每次都要同时
   - 文件夹：`git rm -r --cached 文件夹名`
   - 文件: `git rm --cached 文件名`
 
+## 2.10 把多个分支clone到自己仓库上
 
+1. 克隆原始仓库
 
+   `git clone --mirror git://g.csail.mit.edu/xv6-labs-2022 project_xv6`
 
+2. 在github上创建一个远程仓库，名字为`project_xv6`
+
+3. 删除旧的origin（远程仓库）
+
+   `git remote remove origin`
+
+   - 通过`git remote -v`可以查看当前关联的远程仓库是哪一个
+
+4. 更新新的origin
+
+   `git remote add origin git@github.com:Fernweh-yang/project_xv6.git`
+
+5. 上传分支
+
+   - 上传所有分支：`git push --all origin`
+   - 上传单个分支：`git push origin`
 
 # 三、commit技巧
 
