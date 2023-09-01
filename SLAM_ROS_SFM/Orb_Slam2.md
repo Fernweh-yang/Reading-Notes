@@ -19,8 +19,13 @@
    Pangolin 0.8
    ros      noteic
    ubuntu   20
+   eigen    3.3.7
    ```
 
+   - 检查eigen版本:
+
+     `pkg-config --modversion eigen3`
+     
    - 检查opencv是否安装成功
 
      ```
@@ -67,42 +72,23 @@
      }
      ```
 
-2. 下载orb-slam2后修改
+2. 下载orb-slam2:
 
-   1. 修改CMakeLists，和Thirdparty/DBow2的CMakeLists
+   因为用opencv4代替了opencv3,pangolin0.8代替了0.5所以有很多需要修改的地方: [参考](https://gaoyichao.com/Xiaotu/?book=ORB_SLAM%E6%BA%90%E7%A0%81%E8%A7%A3%E8%AF%BB&title=ORB_SLAM2%E7%9A%84%E6%80%BB%E4%BD%93%E6%A1%86%E6%9E%B6%E4%B8%8E%E5%AE%89%E8%A3%85%E8%AF%95%E7%94%A8)
 
-      ```cmake
-       # 原本为：find_package(OpenCV 3.0 QUIET)
-       find_package(OpenCV 4.7 QUIET)
-       if(NOT OpenCV_FOUND)
-          find_package(OpenCV 2.4.3 QUIET)
-          if(NOT OpenCV_FOUND)
-             message(FATAL_ERROR "OpenCV > 2.4.3 not found.")
-          endif()
-       endif()
-      ```
+   具体修改见commit：`e3ef925` opencv4,pangolin0.8下编译成功
 
-   2. ORB_SLAM2/include/system.h:添加`#include<unistd.h>`
+   下载修改完的代码见[git](https://github.com/Fernweh-yang/SLAM_Code_Learning/tree/main/ORB_SLAM2)
 
-   3. ORB_SLAM2/include/LoopClosing.h:
-
-      ```c++
-      typedef map<KeyFrame*,g2o::Sim3,std::less<KeyFrame*>,
-              Eigen::aligned_allocator<std::pair<const KeyFrame*, g2o::Sim3> > > KeyFrameAndPose;
-      //改为：
-      typedef map<KeyFrame*,g2o::Sim3,std::less<KeyFrame*>,
-              Eigen::aligned_allocator<std::pair<KeyFrame *const, g2o::Sim3> > > KeyFrameAndPose;
-      ```
-
-   4. 
+   ```
+   git clone git@github.com:Fernweh-yang/SLAM_Code_Learning.git
+   ```
 
 3. 编译
 
-   ```
-   mkdir -p orbslam_ws/src/ORB_SLAM2
-   cd orbslam_ws/src/ORB_SLAM2
+   ```shell
    chmod +x build.sh
-   ./build.sh
+   ./build.sh	# 里面写了mkdir build等操作，所以放心直接用
    ```
 
 ## 2. 试运行
@@ -113,25 +99,65 @@
 
    - Monocular Examples:
 
-     `./Examples/Monocular/mono_tum Vocabulary/ORBvoc.txt Examples/Monocular/TUMX.yaml PATH_TO_SEQUENCE_FOLDER`
-
-     - TUMX.yaml的X改为下载数据集序列，比如第一个数据集就改为TUM1.yaml
+     ```shell
+     ./Examples/Monocular/mono_tum Vocabulary/ORBvoc.txt \
+     							  Examples/Monocular/TUMX.yaml \
+     							  PATH_TO_SEQUENCE_FOLDER
+     ```
+   
+     - ORBvoc.txt是官方提供的一个用于场景识别和重定位的特征字典
+   
+     - TUMX.yaml的X改为下载数据集序列
+   
+       TUM1.yaml,TUM2.yaml or TUM3.yaml 分别对应于数据集freiburg1, freiburg2 and freiburg3
      - PATH_TO_SEQUENCE_FOLDER改为数据集的安装目录（在安装目录下ctrl+l）
-
+   
+     比如:
+   
+     ```shell
+     ./Examples/Monocular/mono_tum Vocabulary/ORBvoc.txt \
+     							  Examples/Monocular/TUM2.yaml \
+                                   /home/yang/Datasets/TUM/rgbd_dataset_freiburg2_xyz 
+     ```
+   
+     
+   
    - RGB-D Examples:
-
+   
      1. 下载代码[associate.py](https://vision.in.tum.de/data/datasets/rgbd-dataset/tools)来将color images数据关联到depth images
-
+   
+        在数据集文件夹下运行：
+   
         `python2 associate.py rgb.txt depth.txt > associations.txt`
-
+     
         - 注意要用python2来运行这个脚本
         - 将脚本放在这些数据集的文件夹中
-
-     2. `./Examples/RGB-D/rgbd_tum Vocabulary/ORBvoc.txt Examples/RGB-D/TUMX.yaml PATH_TO_SEQUENCE_FOLDER ASSOCIATIONS_FILE`
-
-        - TUMX.yaml的X改为下载数据集序列，比如第一个数据集就改为TUM1.yaml
+   
+     2. 运行：
+     
+        ```
+        ./Examples/RGB-D/rgbd_tum Vocabulary/ORBvoc.txt \
+                                  Examples/RGB-D/TUMX.yaml \
+                                  PATH_TO_SEQUENCE_FOLDER \
+                                  ASSOCIATIONS_FILE
+        ```
+     
+        - TUMX.yaml的X改为下载数据集序列
+     
+          TUM1.yaml,TUM2.yaml or TUM3.yaml 分别对应于数据集freiburg1, freiburg2 and freiburg3
         - PATH_TO_SEQUENCE_FOLDER改为数据集的安装目录（在安装目录下ctrl+l）
         - ASSOCIATIONS_FILE 是PATH_TO_SEQUENCE_FOLDER/associations.txt
+     
+        比如：
+     
+        ```
+        ./Examples/RGB-D/rgbd_tum Vocabulary/ORBvoc.txt \
+        						  Examples/RGB-D/TUM1.yaml \
+        						  /home/yang/Datasets/TUM/rgbd_dataset_freiburg1_xyz \
+                                  /home/yang/Datasets/TUM/rgbd_dataset_freiburg1_xyz/associations.txt 
+        ```
+     
+        
 
 - 运行结果
   - 图像上的绿点：跟踪成功的特征点帧
