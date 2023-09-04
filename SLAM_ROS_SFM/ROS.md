@@ -133,7 +133,7 @@ catkin clean
    3. rosmsg list,
    4. rospkg list,
 
-## 一、创建工作空间Workspace
+## 1. 创建工作空间Workspace
 
 ```shell
 ## 创建工作空间
@@ -165,7 +165,7 @@ $ echo $ROS_PACKAGE_PATH
   # 然后在该文件中末尾加入：
   source ~/Destktop/as_ws/devel/setup.bash
   ```
-## 二、创建包Package
+## 2. 创建包Package
 
 - 一个catkin package必须具备：
 
@@ -234,7 +234,7 @@ $ echo $ROS_PACKAGE_PATH
 
     `$ rospack depends beginner_tutorials`
 
-### 1.定制自己的包package.xml
+### 1.1 定制自己的包package.xml
 
 通过修改**package.xml**来customize包。
 
@@ -305,7 +305,7 @@ $ echo $ROS_PACKAGE_PATH
 
    
 
-### 2.源码/二进制安装包
+### 1.2 源码/二进制安装包
 
 - 两者区别
 
@@ -344,7 +344,7 @@ $ echo $ROS_PACKAGE_PATH
 
      在.bashrc中加入source ~/catkin_ws/devel/setup.bash，即可
 
-## 三、构建包catkin_make
+## 3. 构建包catkin_make
 
 - 首先使用catkin_make 
 
@@ -400,7 +400,7 @@ $ echo $ROS_PACKAGE_PATH
   	
   	例子：`rosls roscpp_tutorials`
 
- ## 节点node和节点管理器master
+ ## 4. 节点node和节点管理器master
 
 一个包里可以有多个可执行文件，可执行文件在运行之后就成了一个进程process，这个进程在ROS中就叫做节点。
 
@@ -439,7 +439,7 @@ $ echo $ROS_PACKAGE_PATH
   
   - `rosnode cleanup`清除不可到达节点的注册信息
 
-### 简单的例子
+### 4.1 简单的例子
 
 #### 1.Publisher
 
@@ -616,7 +616,7 @@ int main(int argc, char **argv)
 
 ```
 
-### 用`rosrun`启动单个节点
+### 4.2 用`rosrun`启动单个节点
 
   - 命令：`rosrun [--prefix cmd] [--debug] package_name node_name [ARGS]`
 
@@ -632,9 +632,107 @@ int main(int argc, char **argv)
     
       `$ rosrun --prefix 'gdb -ex run --args' pkg_name node_name`
 
+### 4.3 ros::NodeHandle的用法
 
+#### 1. 自动启动和结束
 
-## Roslaunch的使用 
+`ros::NodeHandle`管理着一个内部引用数，使得开启和结束一个节点（node）可以简单地按照下面一行代码完成：
+
+```c++
+ros::NodeHandle nh;
+```
+
+#### 2. 命名空间
+
+- 节点的命名空间有什么用
+
+  节点的命名空间在ROS中用于隔离和组织节点内的ROS资源，如参数、话题和服务，以便不同节点可以具有相同名称的资源而不会发生冲突。
+
+  1. **参数隔离**
+
+     ```c++
+     // 机器人1的参数
+     ros::NodeHandle nh1("robot1");
+     nh1.setParam("max_speed", 1.0);
+     
+     // 机器人2的参数
+     ros::NodeHandle nh2("robot2");
+     nh2.setParam("max_speed", 0.5);
+     ```
+
+     考虑两个机器人节点，每个节点都有一个名为 "max_speed" 的参数，用于设置机器人的最大速度。通过在不同的命名空间下定义这些参数，可以轻松地为每个机器人配置不同的最大速度
+
+  2. **话题隔离**
+
+     ```c++
+     // 机器人1的激光扫描发布器
+     ros::NodeHandle nh1("robot1");
+     ros::Publisher pub1 = nh1.advertise<sensor_msgs::LaserScan>("laser_scan", 10);
+     
+     // 机器人2的激光扫描发布器
+     ros::NodeHandle nh2("robot2");
+     ros::Publisher pub2 = nh2.advertise<sensor_msgs::LaserScan>("laser_scan", 10);
+     ```
+
+     考虑一个多机器人系统，每个机器人都有一个激光传感器发布名为 "laser_scan" 的激光扫描话题。通过在每个机器人节点的命名空间下发布 "laser_scan" 话题，可以确保每个机器人的激光数据不会与其他机器人的数据混淆。
+
+  3. **服务隔离**
+
+     ```c++
+     // 机器人1的移动服务服务器
+     ros::NodeHandle nh1("robot1");
+     ros::ServiceServer server1 = nh1.advertiseService("move", moveCallback1);
+     
+     // 机器人2的移动服务服务器
+     ros::NodeHandle nh2("robot2");
+     ros::ServiceServer server2 = nh2.advertiseService("move", moveCallback2);
+     
+     // 在客户端想调用机器人2的服务:通过命名空间来指定
+     ros::NodeHandle nh;
+     ros::ServiceClient client = nh.serviceClient<your_robot_msgs::Move>("robot2/move");
+     
+     ```
+
+     考虑一个机器人系统，每个机器人都提供了一个名为 "move" 的移动服务。通过在每个机器人节点的命名空间下提供 "move" 服务，可以确保不同机器人的移动服务不会相互干扰。
+
+- 如何创建命名空间
+
+  `NodeHandles`可以指定一个命名空间给它的构造函数：
+
+  ```
+  ros::NodeHandle nh("my_namespace");
+  ```
+
+  这行代码将创建一个相对于`NodeHandle`的域名，`<node_namespace>/my_namespace`，而不是直接地表示为`<node_namespace>`。
+
+  你也可以指定一个父节点的NodeHandle和命名空间，后面可以跟子节点的NodeHandle和命名空间：
+
+  ```
+  ros::NodeHandle nh1("ns1");
+  ros::NodeHandle nh2(nh1, "ns2");
+  ```
+
+  这将会把`nh2`放在`<node_namespace>/ns1/ns2`的命名空间下。
+
+- 私有命名空间
+
+  ```c++
+  // 1.～+name
+  ros::NodeHandle nh("~my_private_ns");
+  ros::Subscriber sub = nh.subscribe("my_private_topic", ...);  // <node_namespace>/<node_name>/my_private_ns/my_private_topic
+  
+  // 2.~
+  ros::NodeHandle nh("~");
+  ros::Subscriber sub = nh.subscribe("my_private_topic", ...);  // <node_namespace>/<node_name>/my_private_topic
+  
+  // 上面的node_name通过函数ros::init(argc, argv, "xx")来定义,这里node_name为xx
+  // 
+  ```
+
+  
+
+## 5. Roslaunch的使用 
+
 ### 用[roslaunch](http://wiki.ros.org/roslaunch/XML#if_and_unless_attributes)启动多个节点
 
 用法：`$ roslaunch [package] [filename.launch]`
@@ -808,9 +906,9 @@ rosrun tf static_transform_publisher 1 0 0 0 0 0 1 world av1 100 __name:=av1broa
 
    
 
-## $$ROS通信框架
+## 6. ROS通信框架
 
-### 0. 不同通信框架的对比
+### 6.0 不同通信框架的对比
 
 ROS的通信方式有以下四种：
 
@@ -854,7 +952,7 @@ ROS的通信方式有以下四种：
   - **复杂性**：相对于 Services，Actions 的实现和使用相对复杂，需要定义多个消息类型（目标、反馈、结果），编写服务器端和客户端的逻辑，以及处理状态机等。
   - 由于 Action 通信需要在多个消息类型之间进行来回交互，因此在**通信开销**方面可能比 Services 稍微更高。
 
-### 1. 话题Topic
+### 6.1 话题Topic
 
 对于实时性、周期性的消息，使用topic来传输是最佳的选择。topic是一种点对点的单向通信方式，这里的“点”指的是node。
 
@@ -1181,7 +1279,7 @@ $ catkin_make
 $ cd -
 ```
 
-### 2. 服务Services
+### 6.2 服务Services
 
 区别于Topic是一种单项的异步通信方式，Service通信是双向的，它不仅可以发送消息，同时还会有反馈。
 
@@ -1310,7 +1408,7 @@ $ cd -
 
    利用api来对参数服务器进行操作
 
-### 3. 动作库Action
+### 6.3 动作库Action
 
 一些常见的[动作库](https://sychaichangkun.gitbooks.io/ros-tutorial-icourse163/content/chapter4/4.6.html)
 
@@ -1378,7 +1476,7 @@ $ cd -
   <run_depend>actionlib_msgs</run_depend>
   ```
 
-## $$时间Time和时长Duration
+## 7. 时间Time和时长Duration
 
 - time由2种
   - 通常ROS使用pc系统的clock作为time source(**wall time**)
@@ -1465,7 +1563,7 @@ $ cd -
 
 
 
-## $$调试(rqt_console)
+## 8. 调试(rqt_console)
 
 - 使用`rqt_console`和`rqt_logger_level`   debug
 
@@ -1499,7 +1597,7 @@ $ cd -
   # 比如设置为Warn,则会得到Warn,Error,Fatal的消息
   ```
 
-## $$[ROS Bags](http://wiki.ros.org/rosbag)
+## 9. [ROS Bags](http://wiki.ros.org/rosbag)
 
 在 ROS 系统中，可以使用 bag 文件来保存和恢复系统的运行状态，比如录制雷达和相机话题的 bag 包，然后回放用来进行联合外参标定。
 
@@ -1530,7 +1628,7 @@ $ cd -
 
 - 可以用rqt_bag来调试
 
-## $$编辑rosed
+## 10. 编辑rosed
 
 可以直接在一个包内直接用vim打开一个文件来编辑，而不需要具体的地址
 
@@ -1542,7 +1640,7 @@ $ cd -
 
 ​			如果不知道具体的文件名，可以按两下tab显式这个包下所有的文件名。
 
-## $$Debugging Strategies
+## 11. Debugging Strategies
 
 - Compile and run code often to catch bugs early
 - Understand compilation and runtime error messages
@@ -1557,9 +1655,9 @@ $ cd -
 - Maintain code with unit tests 单元测试and integration tests组装测试
 
 
-## 五、Topic:写一个简单的Publisher 和 Subscriber
+## 12. Topic:写一个简单的Publisher 和 Subscriber
 
-### 五(一)使用c++来写
+### 12.1 使用c++来写
 
 #### 1. 写一个Publisher Node
 
@@ -1734,7 +1832,7 @@ $ cd -
   $ catkin_make  
   ```
 
-### 五(二)使用python来写
+### 12.2 使用python来写
 
 #### 1. 写一个Publisher Node
 
@@ -1853,7 +1951,7 @@ $ cd ~/Desktop/catkin_ws
 $ catkin_make
 ```
 
-### 五(三)测试Publisher和Subscriber
+### 12.3 测试Publisher和Subscriber
 
 1. `$ roscore`
 
@@ -1877,9 +1975,9 @@ $ catkin_make
 
 
 
-## 六、Servics:写一个简单的Server和Client
+## 13. Servics:写一个简单的Server和Client
 
-### 六(一)使用C++来写
+### 13.1 使用C++来写
 
 #### 1. 写一个Server Node
 
@@ -2008,7 +2106,7 @@ $ catkin_make
   - 新终端打开服务`rosrun beginner_tutorials add_two_ints_server`
   - 新终端打开客户`$ rosrun beginner_tutorials add_two_ints_client 1 3`
 
-### 六(二)使用python来写
+### 13.2 使用python来写
 
 #### 1. 写一个ServerNode
 
@@ -2093,11 +2191,11 @@ $ catkin_make
   ```
 
 
-## 七、Action:写一个简单的Server和Client
+## 14. Action:写一个简单的Server和Client
 
 [参考](http://wiki.ros.org/actionlib_tutorials/Tutorials)
 
-### 七(零)创建action message
+### 14.0 创建action message
 
 - 创建一个包actionlib_tutorials:
 
@@ -2195,7 +2293,7 @@ $ catkin_make
   FibonacciActionGoal.h      FibonacciActionResult.h  FibonacciGoal.h
   ```
 
-### 七(一)使用C++来写
+### 14.1 使用C++来写
 
 #### 1. 写一个Server
 
@@ -2373,9 +2471,9 @@ int main (int argc, char **argv)
 
 
 
-### 七(二)使用python来写
+### 14.2 使用python来写
 
-### 七(三)编译和运行
+### 14.3 编译和运行
 
 在七(零)的cmake基础上修改cmake为：
 
