@@ -5,6 +5,8 @@
 
 - dq-cpp-vrep: [git](https://github.com/dqrobotics/cpp-examples) 
 
+- libfranka别人的[笔记](https://www.guyuehome.com/41074)
+
 # 一、dqrobotics
 
 ## 1. 安装编译
@@ -292,6 +294,7 @@ xd = r + E_*0.5*p*r;				   // 应用公式2
 
    ```c++
    std::string robot_ip = "192.168.3.127";
+   // 用于和机器人通信(I/O)
    franka::Robot panda(robot_ip);
    setDefaultBehaviour(panda);
    ```
