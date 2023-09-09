@@ -1367,5 +1367,24 @@ traj_controller:
   
   ```
 
-# 六、
+# 六、各开源库
+
+1. [franka_pick_place](https://github.com/jc-bao/franka_pick_place)
+
+   - 用了aruco_ros和easy_handeye来手眼标定
+   - 使用moveit来控制移动和爪子的开合
+
+2. [Pick & Place Example](https://frankaemika.github.io/docs/franka_ros.html#pick-place-example)
+
+   - 通过来shell中发送rostopic来控制爪子的开合
+
+     ```shell
+     rostopic pub --once /franka_gripper/grasp/goal \
+                  franka_gripper/GraspActionGoal \
+                  "goal: { width: 0.03, epsilon:{ inner: 0.005, outer: 0.005 }, speed: 0.1, force: 5.0}"
+     ```
+
+3. [teleop_grasp](https://github.com/teleop-grasp/teleop_grasp)
+
+   - 感觉可以借鉴
 
