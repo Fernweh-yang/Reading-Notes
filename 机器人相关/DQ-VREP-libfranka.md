@@ -1033,7 +1033,17 @@ traj_controller:
   - $T_{camera\_in\_hand}$：相机相对于末端执行器坐标系的位姿，即我们要求的手眼矩阵X
   - $T_{object\_in\_camera}$：检测物体在相机中的位姿
 
-  如此得到10组以上的这个等式(即第2和第4个位姿T)，就可以计算手眼矩阵了。
+  根据眼在手上(eye in hand)、眼固定(eye to hand)。又有两种利用上面等式的方式：
+
+  1. **眼在手上(eye in hand)**
+
+     这个示意图中的$T_{Camera}^{End}$ 即上面的$T_{camera\_in\_hand}$，摘自2个文档，所以写法不一样但意思一致
+
+     ![img](https://raw.githubusercontent.com/Fernweh-yang/ImageHosting/main/img/v2-d05680bea99b7a8d58ec1cedd535eddf_r.jpg)
+
+  2. **眼固定(eye to hand)**
+
+     ![img](https://raw.githubusercontent.com/Fernweh-yang/ImageHosting/main/img/%E7%9C%BC%E5%9B%BA%E5%AE%9A.jpg)
 
 - 步骤：
 
