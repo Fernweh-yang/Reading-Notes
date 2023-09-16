@@ -363,42 +363,11 @@ $ echo $ROS_PACKAGE_PATH
 
     例子：`$ catkin_make --source my_src`
 
-  ## $$ROS文件系统Filesystem Concepts
+- 如果workspace/src下有多个包，但想不编译某个package。
 
-- **Packages**: Packages are the software organization unit of ROS code. Each package can contain libraries, executables可执行文件, scripts脚本, or other artifacts代码生成物.
+  可以在不想被编译的package目录下新建了CATKIN_IGNORE的文件，不用写任何东东。
 
-- **Manifests**: A manifest is a description of a *package*. It serves to define dependencies between *packages* and to capture meta information about the *package* like version, maintainer, license, etc...
-
-### Filesystem Tools
-注意：所有的ros工具只会找到在[ROS_PACKAGE_PATH](http://wiki.ros.org/ROS/EnvironmentVariables#ROS_PACKAGE_PATH)中列出的ros包。可用`$ echo $ROS_PACKAGE_PATH`查看
-
-- **rospack**
-
-  用于找packages的信息。
-
-  用法：`$ rospack find [package_name]`
-
-  例子：`$ rospack find roscpp`
-
-- **roscd**
-
-  rosbash套件的一部分，用于前往packages的目录directory。
-
-    用法：`$ roscd <package>[/subdir]`
-
-    例子：`$ roscd roscpp`  前往roscpp包所在的目录，可用`pwd`查看当前工作目录。
-
-    			`$ roscd roscpp/cmake  `前往roscpp包所在的目录中cmake子目录。
-
-  - `roscd log`如果运行过ros程序后，可以查看日志文件
-
-- **rosls**
-
-  相当于ls，直接显式包里的内容
-
-  	用法：`$ rosls <package-or-stack>[/subdir]`
-  	
-  	例子：`rosls roscpp_tutorials`
+  返回到workspace目录下后执行catkin_make就不会编译带有CATKIN_IGNORE的package。
 
  ## 4. 节点node和节点管理器master
 
@@ -2517,6 +2486,44 @@ add_dependencies(
   2. `rosrun actionlib_tutorials fibonacci_server`
   3. `rosrun actionlib_tutorials fibonacci_client`
   4. `rqt_graph`
+
+## 15. ROS文件系统Filesystem Concepts
+
+- **Packages**: Packages are the software organization unit of ROS code. Each package can contain libraries, executables可执行文件, scripts脚本, or other artifacts代码生成物.
+
+- **Manifests**: A manifest is a description of a *package*. It serves to define dependencies between *packages* and to capture meta information about the *package* like version, maintainer, license, etc...
+
+### Filesystem Tools
+
+注意：所有的ros工具只会找到在[ROS_PACKAGE_PATH](http://wiki.ros.org/ROS/EnvironmentVariables#ROS_PACKAGE_PATH)中列出的ros包。可用`$ echo $ROS_PACKAGE_PATH`查看
+
+- **rospack**
+
+  用于找packages的信息。
+
+  用法：`$ rospack find [package_name]`
+
+  例子：`$ rospack find roscpp`
+
+- **roscd**
+
+  rosbash套件的一部分，用于前往packages的目录directory。
+
+    用法：`$ roscd <package>[/subdir]`
+
+    例子：`$ roscd roscpp`  前往roscpp包所在的目录，可用`pwd`查看当前工作目录。
+
+    			`$ roscd roscpp/cmake  `前往roscpp包所在的目录中cmake子目录。
+
+  - `roscd log`如果运行过ros程序后，可以查看日志文件
+
+- **rosls**
+
+  相当于ls，直接显式包里的内容
+
+  	用法：`$ rosls <package-or-stack>[/subdir]`
+  	
+  	例子：`rosls roscpp_tutorials`
 
 # 二、ROS进阶
 
