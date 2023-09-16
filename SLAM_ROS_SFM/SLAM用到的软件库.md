@@ -1724,4 +1724,22 @@ sudo make install    # Install in /usr/local/ by default
   
   ```
 
-  
+
+# osqp库
+
+osqp全称Operator Splitting Quadratic Program，是一个开源的二次规划问题求解器，由牛津大学维护。osqp采用了交替方向乘子法（ADMM）来求解二次规划问题，
+
+二次规划问题的标准形式如下：
+$$
+min f(x) = x^T Q x + c^T x\\
+s.t. Ax <= b
+$$
+可以使用二次规划问题来求解机器人运动的轨迹，使机器人能够在最短时间内到达目的地。
+
+## 1. 安装
+
+见[osqp](https://github.com/osqp/osqp)
+
+[osqp-eigen](https://github.com/robotology/osqp-eigen)
+
+## 2. 使用

@@ -358,7 +358,20 @@ make
 
 
 
+### 1.3.3 修改cmake安装地址
+
+创建完build后，需要在这里创建makefile文件：
+
+这时候修改地址：myfolder
+
+```
+cmake -DCMAKE_INSTALL_PREFIX:PATH=myfolder ..
+```
+
+
+
 # 2. CMake学习笔记
+
 ## 2.0 学习资源汇总
 
 [官方教程](https://cmake.org/cmake/help/latest/guide/tutorial/index.html)
