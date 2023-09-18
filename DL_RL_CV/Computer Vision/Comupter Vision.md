@@ -823,16 +823,34 @@ $$
   ![](https://github.com/Fernweh-yang/Reading-Notes/blob/main/%E7%AC%94%E8%AE%B0%E9%85%8D%E5%A5%97%E5%9B%BE%E7%89%87/Computer%20Vision/%E5%AF%B9%E6%9E%81%E5%87%A0%E4%BD%95.jpg?raw=true)
 
   - $O,O'$是两个相机(光圈)的中心
+  
   - P点是物体所在
     - 如果我们只看左边图像$\pi$上的点p，我们不能知道物体到底是在哪，点P1、P2或其他地方，可有了右边图像$\pi'$上的$p'$我们就能得到物体点P
+    
   - 基线：连线$OO'$
+  
   - 对极平面Epipolar plane of P：极限$OO'$和观测物体$P$组成的平面$OO'P$
     - The epipolar plane is spanned by the position vectors of the image point and of the epipole :$span(p,e)$
+    
   - 对极线Epipolar line：对极平面和两相机图像的交线$l,l'$
+    
+    - 线op上所有的点$p_1,p_2$在左图像中，都被看作了同一个点，但是在右图像中会将其看作一根线$l'$
+    
+      右图像$\pi'$上的这根线$l'$就是左图像$\pi$上线op的对极线
+    
+      同样的，$l$是右图上线$o'p$的对极线
+    
+    - 双目相机可以直接按对极几何计算，单目相机需要在不同位置拍2张图利用视差（disparity）信息来估算场景中点的深度。
+    
     - The intersection相交 of the epipolar plane and the image plane
+    
     - The epipolar line is the image that is created from the Preimage原像 in the other camera system
+    
     - The epipolar line is identified确认 by means of the Coimage余象：$l$~$e\times p$
+    
   - 对极点Epipoles：基线和两相机图像的交点$e,e'$
+  
+    - 相机中心在另一个相机图像平面的投影点
     - The perspective projection透视投影 of the respective各自的 optical centres in the other camera systems
 ### 本质矩阵:Essential matrix
 
