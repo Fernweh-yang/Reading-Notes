@@ -1,6 +1,50 @@
+# 零、资源汇总
+
+- [课程](https://cvlife.net/)
+
+- [ORB-SLAM2注释代码](https://github.com/electech6/ORB_SLAM2_detailed_comments)
+
+- [ORB-SLAM3注释代码](https://github.com/electech6/ORB_SLAM3_detailed_comments)
+
+- [VINS-Mono注释代码](https://github.com/xieqi1/VINS-Mono-noted)
+
+  基于单目相机和 IMU 的 SLAM 算法
+
+- [VINS-Fusion注释代码](https://github.com/xieqi1/VINS-Fusion-noted)
+
+  基于多传感器（包括单目相机、双目相机和 IMU）的 SLAM 算法。
+
+- [运动规划注释代码](https://github.com/felderstehost/ros-navigation-noetic)
+
+  ros自带的navigation库
+
+- [OpenMVS注释代码](https://github.com/electech6/openMVS_comments)
+
+  OpenMVS 是一个基于 SfM 算法的多视角立体重建工具。SfM 算法是指从多个图像中恢复三维结构的算法。
+
+- [lio-sam注释代码](https://github.com/xieqi1/lio-sam-noted)
+
+  基于激光雷达和惯性测量单元（IMU）的 SLAM 算法。
+
+- [a-loam注释代码](https://github.com/xieqi1/a-loam-noted)
+
+  基于激光雷达的 SLAM 算法
+
+- [LVI-SAM注释代码](https://github.com/electech6/LVI-SAM_detailed_comments)
+
+  基于激光雷达、视觉和惯性测量单元（IMU）的 SLAM 算法。
+
+- [R3LIVE注释代码](https://gitee.com/qcl5683/R3LIVE-CommentV)
+
+  基于激光雷达、视觉和惯性测量单元（IMU）的 SLAM 算法。
+
+- [cartographer注释代码](https://github.com/xiangli0608/cartographer_detailed_comments_ws)
+
+  激光slam
+
 # 一、基础
 
-## 0. ORB-Slam2框架
+## 1. ORB-Slam2框架
 
 - 出自论文
 
@@ -10,7 +54,7 @@
 
 ![](https://github.com/Fernweh-yang/Reading-Notes/blob/main/%E7%AC%94%E8%AE%B0%E9%85%8D%E5%A5%97%E5%9B%BE%E7%89%87/slam/orb-slam%E6%A1%86%E6%9E%B6%E4%B8%AD%E6%96%87.png?raw=true)
 
-## 1. 安装orb-slam2
+## 2. 安装orb-slam2
 
 1. 环境
 
@@ -91,7 +135,7 @@
    ./build.sh	# 里面写了mkdir build等操作，所以放心直接用
    ```
 
-## 2. 试运行
+## 3. 试运行
 
 1. 下载[数据集](http://vision.in.tum.de/data/datasets/rgbd-dataset/download )
 
@@ -167,7 +211,7 @@
   - 红点：局部地图点
   - 黑点：所有的地图点
 
-## 3. 变量命名
+## 4.. 变量命名
 
 - m(member)开头的变量表示类的成员变量
 
@@ -223,6 +267,10 @@
   ```
 
 # 二、ORB特征提取
+
+https://zhuanlan.zhihu.com/p/636742092
+
+todo: 设置**[OpenImageDebugger](https://github.com/OpenImageDebugger/OpenImageDebugger)**
 
 # 三、地图初始化
 
