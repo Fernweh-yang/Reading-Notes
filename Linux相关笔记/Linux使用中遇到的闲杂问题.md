@@ -103,5 +103,20 @@ terminator:`sudo apt-get install terminator`
 [plugins]
 ```
 
+# 如何打开linux的性能模式
 
+- 检查当前cpu的频率：
+
+  ```
+  sudo apt install cpufrequtils
+  cpufreq-info
+  ```
+
+- 改变cpu频率
+
+  ```
+  sudo apt install indicator-cpufreq
+  ```
+
+  - 然后重启在右上角手动更改性能模式
 
