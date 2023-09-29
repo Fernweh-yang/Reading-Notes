@@ -1280,6 +1280,18 @@ $$
   - 对于极线：$l_2^{'}等价于Fx_1^{'},l_1^{'}等价于Fx_2^{'}$
   - 不能依靠F来三维重建
 
+## 6. 立体校正
+
+参考：[知乎](https://zhuanlan.zhihu.com/p/466365225)
+
+### 6.1 什么是立体校正
+
+立体校正(stereoRectify)是指将两个摄像机拍摄的图像映射到一个共享的坐标系中，以便可以进行立体匹配。立体匹配是指在两个或多个摄像机拍摄的图像中，找到对应点的技术。
+
+- 通过上面的对极几何(Epipolar geometry)可以确定图片上的匹配好的1个点在空间中的位置
+
+  ![img](https://pic2.zhimg.com/80/v2-aa385cca5bcb9407987494bcb63ce6e1_720w.webp)
+
 # 四、Planare Szenen
 
 Planar Scenes平面场景
@@ -2804,3 +2816,7 @@ $$
 ### 5.4Baker-Mattews光流算法
 
 ![image-20230722210407032](https://raw.githubusercontent.com/Fernweh-yang/ImageHosting/main/img/Baker-Mattews%E5%85%89%E6%B5%81%E7%AE%97%E6%B3%95.png)
+
+
+
+# 
