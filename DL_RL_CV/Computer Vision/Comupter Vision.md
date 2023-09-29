@@ -59,10 +59,17 @@
 
   ![img](https://cdn.jsdelivr.net/gh/Fernweh-yang/ImageHosting@main/img/%E5%9B%9B%E5%A4%A7%E5%9D%90%E6%A0%87%E7%B3%BB.webp)
 
-  - 世界坐标系：根据情况而定，可以表示任何物体，此时是由于相机而引入的。单位m。
-  - 相机坐标系：以摄像机光心为原点（在针孔模型中也就是针孔为关心），z轴与光轴重合也就是z轴指向相机的前方（也就是与成像平面垂直），x轴与y轴的正方向与物体坐标系平行，其中上图中的f为摄像机的焦距。单位m
-  - 图像物理坐标系（也叫平面坐标系）：用物理单位表示像素的位置，坐标原点为摄像机光轴与图像物理坐标系的交点位置。坐标系为图上o-xy。单位是mm。单位毫米的原因是此时由于相机内部的CCD传感器是很小的，比如8mm x 6mm。但是最后图像照片是也像素为单位比如640x480.这就涉及到了图像物理坐标系与像素坐标系的变换了。下面的像素坐标系将会讲到。
-  - 像素坐标系：以像素为单位，坐标原点在左上角。这也是一些opencv，OpenGL等库的坐标原点选在左上角的原因。当然明显看出CCD传感器以mm单位到像素中间有转换的。举个例子，CCD传感上上面的8mm x 6mm，转换到像素大小是640x480. 假如dx表示像素坐标系中每个像素的物理大小就是1/80. 也就是说毫米与像素点的之间关系是piexl/mm.
+  - **世界坐标系**：根据情况而定，可以表示任何物体，此时是由于相机而引入的。单位m。
+  - **相机坐标系**：
+    - 以摄像机光心为原点（在针孔模型中也就是针孔为关心）
+    - z轴与光轴重合也就是z轴指向相机的前方（也就是与成像平面垂直）
+    - x轴与y轴的正方向与物体坐标系平行，其中上图中的f为摄像机的焦距。单位m
+  - **图像坐标系**（也叫平面坐标系）：
+    - 用物理单位表示像素的位置，坐标原点为图像的中心处：摄像机光轴与图像物理坐标系的交点位置。
+    - 坐标系为图上o-xy。单位是mm。单位毫米的原因是此时由于相机内部的CCD传感器是很小的，比如8mm x 6mm。
+  - **像素坐标系**：
+    - 以像素为单位，坐标原点在左上角。这也是一些opencv，OpenGL等库的坐标原点选在左上角的原因。
+    - 当然明显看出CCD传感器以mm单位到像素中间有转换的。举个例子，CCD传感上上面的8mm x 6mm，转换到像素大小是640x480. 假如dx表示像素坐标系中每个像素的物理大小就是1/80. 也就是说毫米与像素点的之间关系是piexl/mm.
 
 # 一、Wissenswertes über Bilder
 
@@ -619,7 +626,9 @@ Perspective Projection透视投影 with a Calibrated标定的 Camera
 
   1. 射影变换本身的参数，相机的焦点到成像平面的距离，也就是焦距f
 
-  2. 从成像平面坐标系到**像素坐标系**的转换。
+  2. 内参数的作用就是从**图像/成像平面坐标系**（左图）系到**像素坐标系**（右图）的转换。
+
+     ![img](https://cdn.jsdelivr.net/gh/Fernweh-yang/ImageHosting@main/img/%E5%86%85%E5%8F%82%E7%9A%84%E4%BD%9C%E7%94%A8.webp)
 
      - 像素坐标系的原点在左上角
        - ->原点的平移
@@ -640,9 +649,14 @@ Perspective Projection透视投影 with a Calibrated标定的 Camera
     - $\alpha$:Pixelbreite
     - $\beta$:Pixelhöhe
     - $\theta$:Scherung剪切：描述了pixel的形状
-    - $c_x$:X-Offset
-    - $c_y$:Y-Offset
+    
+    > $\alpha,\beta,\theta$：这三个变量在内参矩阵中负责校正图像畸变的参数
+    
+    - $c_x$:X-Offset，表示图像中的水平中心点在相机坐标系中的 x 坐标。
+    - $c_y$:Y-Offset，表示图像中的垂直中心点在相机坐标系中的 y 坐标。
     - $f$:Brennweite焦距
+    
+    > $c_x,c_y,f$：这三个变量在内参矩阵中负责将相机坐标系转为图像坐标系再转为像素坐标系
   
   将1.Bildentstehung中的1式代入这里的2式可得：
   $$
@@ -689,9 +703,9 @@ Perspective Projection透视投影 with a Calibrated标定的 Camera
   Z
   \end{bmatrix}\tag{4}
   $$
-  由此得到**内参数矩阵(Camera Intrinsics) K**:
+  由此得到**内参数矩阵(Camera Intrinsics) K**:也叫Calibration Matrix/Kalibierungsmatrix标定矩阵
   
-  也叫Calibration Matrix/Kalibierungsmatrix标定矩阵
+  功能：**相机坐标系->图像坐标系->像素坐标系**
   $$
   K=K_sK_f
   =
@@ -702,29 +716,52 @@ Perspective Projection透视投影 with a Calibrated标定的 Camera
   \end{bmatrix} \tag{5}
   $$
   
-  - 这里的$\theta$是：像素形状不是矩形而是平行四边形时倾斜的角度。通常像素形状都是矩阵=0。
+  - 这里的$\theta$是：像素形状不是矩形而是平行四边形时倾斜的角度。通常像素形状都是矩阵=0。转为非齐次：
+    $$
+    K\Pi_0=\begin{bmatrix}
+    f_x & f_\theta &c_x\\
+    0 & f_y & c_y\\
+    0 & 0 & 1
+    \end{bmatrix}
+    \begin{bmatrix}
+    1 & 0 & 0&0\\
+    0&1&0&0\\
+    0&0&1&0
+    \end{bmatrix}=\begin{bmatrix}
+    f_x & f_\theta &c_x &0\\
+    0 & f_y & c_y & 0 \\
+    0 & 0 & 1 &0
+    \end{bmatrix}
+    $$
+    
   
-  转为非齐次：
-  $$
-  K\Pi_0=\begin{bmatrix}
-  f_x & f_\theta &c_x\\
-  0 & f_y & c_y\\
-  0 & 0 & 1
-  \end{bmatrix}
-  \begin{bmatrix}
-  1 & 0 & 0&0\\
-  0&1&0&0\\
-  0&0&1&0
-  \end{bmatrix}=\begin{bmatrix}
-  f_x & f_\theta &c_x &0\\
-  0 & f_y & c_y & 0 \\
-  0 & 0 & 1 &0
-  \end{bmatrix}
-  $$
+  - $K_f$：Focal Length Matrix。将图像坐标系转为像素坐标系
+    $$
+    K_f=\begin{bmatrix}
+    f & 0 &0\\
+    0 & f & 0\\
+    0 & 0 & 1
+    \end{bmatrix}
+    $$
   
-  - $K_f$：Focal Length Matrix。世界坐标系->成像平面坐标系
   - $\Pi_0$：Generic Projection Matrix。将齐次转换为非齐次矩阵
-  - $K_s$：Pixel Matrix。成像平面坐标系->像素平面坐标系
+    $$
+    \Pi_0=\begin{bmatrix}
+    1 & 0 & 0&0\\
+    0&1&0&0\\
+    0&0&1&0
+    \end{bmatrix}
+    $$
+  
+  - $K_s$：Pixel Matrix， $c_x,c_y$将相机坐标系转为图像坐标系
+    $$
+    K_s=\begin{bmatrix}
+    \alpha & \theta & c_x\\
+    0 & \beta & c_y \\
+    0 & 0 &1
+    \end{bmatrix}
+    $$
+  
   - 上面4式除了Z，即进行了归一化处理，所以点的深度信息在投影过程中被丢失掉了，这也是为什么单目相机无法得到像素点的深度值。
   
 - 由5式可知K由4个相机构造相关的参数有关
@@ -743,17 +780,17 @@ Perspective Projection透视投影 with a Calibrated标定的 Camera
 
 ### 3.2 外参数
 
-- 由3.1的4式可得：$p=KP$
+- 由3.1的4式可得：$x=KX$
 
-  - p：是成像平面中像点在像素坐标下pixelkoordinaten的坐标
+  - x：是成像平面中像点在像素坐标下pixelkoordinaten的坐标
   - K：是内参数矩阵
-  - P：是相机坐标系Bildkoordinaten下的空间点P的坐标。（P的像点是p）
+  - X：是相机坐标系Bildkoordinaten下的空间点X的坐标。（X的像点是x）
 
   但相机坐标系是会随相机移动而动的，不够稳定，为了稳定需要引入**世界坐标系**。
 
   SLAM中的视觉里程计就是在求解相机在世界坐标系下的运动轨迹。
 
-- 相机坐标系$P_c$转为世界坐标系$P_w$ :$P_c=RP_w+t$
+- 相机坐标系$X_c$转为世界坐标系$X_w$ :$X_c=RX_w+t$
 
   - R：是旋转矩阵
     - 它是正交矩阵，行列式为1，每个列向量都是单位向量且相互正交orthogonal。
@@ -767,11 +804,11 @@ Perspective Projection透视投影 with a Calibrated标定的 Camera
   - t：是平移矩阵
   
   $$
-  P_c=
+  X_c=
   \begin{bmatrix}
   R & t\\
   0^T &1
-  \end{bmatrix}P_w
+  \end{bmatrix}X_w
   $$
   
   由此可得**外参数(Camera Extrinsics)T **:
@@ -779,23 +816,23 @@ Perspective Projection透视投影 with a Calibrated标定的 Camera
   T=\begin{bmatrix}
   R & t\\
   0^T &1
-  \end{bmatrix}
+  \end{bmatrix} \tag{6}
   $$
   
   - 外参数R和t，即位姿，也是SLAM中带估计的目标，代表着机器人的轨迹。
-  
-- 
 
 ### 3.3 相机矩阵
 
-将内外参数组合到一起称之为**相机矩阵**，用于将真实场景中的三维点投影到二维的成像平面。
+将内外参数组合到一起称之为**相机矩阵**，用于将真实场景中的三维点(世界坐标系$X_w$)投影到二维的成像平面(像素坐标系$x$)。
 $$
-\begin{bmatrix}
+\begin{align}
+&x=KX_w\\
+&\begin{bmatrix}
 u\\
 v\\
 1
 \end{bmatrix}
-=\frac{1}{Z}K_sK_f\Pi_0P_c
+=\frac{1}{Z}K_sK_f\Pi_0X_c
 =\frac{1}{Z}
 \begin{bmatrix}
 f_x & f_\theta &c_x &0\\
@@ -811,10 +848,57 @@ X_W\\
 Y_W\\
 Z_W\\
 1
-\end{bmatrix}\tag{4}
+\end{bmatrix}\tag{7}
+\end{align}
 $$
 
+### 3.4 相机矩阵，内参矩阵和外参矩阵汇总
 
+相机成像的本质：就是**三维空间坐标到二维图像坐标的变换，这是一个投影过程** 。相机矩阵就是建立这种三维到二维的投影关系。
+
+- **内参矩阵**：
+
+  上面的公式5：
+  $$
+  K=K_sK_f
+  =
+  \begin{bmatrix}
+  f_x & f_\theta &c_x\\
+  0 & f_y & c_y\\
+  0 & 0 & 1
+  \end{bmatrix}
+  $$
+  相机坐标系->图像坐标系->像素坐标系:
+  $$
+  x=KX_C
+  $$
+  
+
+- **外参矩阵**：
+
+  上面的公式6：
+  $$
+  T=[R\ \ t]=\begin{bmatrix}
+  R & t\\
+  0^T &1
+  \end{bmatrix} 
+  $$
+  世界坐标系->相机坐标系：
+  $$
+  X_C = TX_W
+  $$
+
+- **相机矩阵**：
+
+  也叫投影矩阵，上面的公式7：
+  $$
+  P = KT
+  $$
+  世界坐标系->相机坐标系->图像坐标系->像素坐标系
+  $$
+  x=PX_W
+  $$
+  
 
 ## 4. Bild,Urbild und Cobild
 
@@ -1284,13 +1368,154 @@ $$
 
 参考：[知乎](https://zhuanlan.zhihu.com/p/466365225)
 
-### 6.1 什么是立体校正
+### 6.1 为什么需要立体校正
 
-立体校正(stereoRectify)是指将两个摄像机拍摄的图像映射到一个共享的坐标系中，以便可以进行立体匹配。立体匹配是指在两个或多个摄像机拍摄的图像中，找到对应点的技术。
+立体校正(stereoRectify)是指对两幅图像分别进行一次平面投影变换，**使两幅图像的对应极线在同一条水平向上**，而对极点被映射到无穷远处， 这样可以使两幅图像只存在水平方向上的视差，**立体匹配问题从二维降到一维，从而提高了匹配的速度**。
 
-- 通过上面的对极几何(Epipolar geometry)可以确定图片上的匹配好的1个点在空间中的位置
+- 通过上面的对极几何(Epipolar geometry)可以确定2张图片上的匹配好的1个点在空间中的位置，如下图步骤2中指的那个交点
 
-  ![img](https://pic2.zhimg.com/80/v2-aa385cca5bcb9407987494bcb63ce6e1_720w.webp)
+  ![img](https://cdn.jsdelivr.net/gh/Fernweh-yang/ImageHosting@main/img/%E5%AF%B9%E6%9E%81%E5%87%A0%E4%BD%95%E7%A4%BA%E6%84%8F%E5%9B%BE.webp)
+  
+  - 通过对极几何，可以在搜索像点x的对应匹配点x'时，将**搜索范围控制到第二幅图像的极线l'**上。
+  
+    ![img](https://cdn.jsdelivr.net/gh/Fernweh-yang/ImageHosting@main/img/%E5%AF%BB%E6%89%BE%E5%8C%B9%E9%85%8D%E7%82%B9.webp)
+  
+  - 但l'通常不是水平的，因此需要在第二张图像的一条**斜线**上去搜索**(二维的)，这样效率很慢**。
+  
+  - 所以先进行立体校正(Rectification)操作，使得两幅图像的极线**平行且在水平方向对齐**（下面右图的黄线即极线）。这时搜索对应的匹配点时，就只需要在水平方向上进行**一维搜索，效率更快**
+  
+    ![img](https://cdn.jsdelivr.net/gh/Fernweh-yang/ImageHosting@main/img/%E7%AB%8B%E4%BD%93%E6%A0%A1%E6%AD%A3.webp)
+
+### 6.2 一个简单而有效的立体校正算法推导
+
+[论文](https://fusiello.github.io/papers/mva99.pdf)
+
+- 从世界坐标系下的点$X_w$到像素坐标下的成像点的直线一定会过光心，如下图所示
+
+  ![img](https://pic2.zhimg.com/80/v2-9080f5a6c3188025c01482831debb2cd_720w.webp)
+
+  由二、3.3相机矩阵的4式可知，三维点(世界坐标系$X_w$)投影到二维的成像平面(像素坐标系$x$)有公式：$x=KX_w$
+
+  那么世界坐标下的三维空间点$X_w$可以表示为：
+  $$
+  X_w=c+\lambda (KR)^{-1}\ \overline{x}\tag{1}
+  $$
+
+  - $\overline{x}$：成像平面坐标系下图像上点坐标，上横线表示其次坐标
+  - $c$：光心的坐标。光心(小孔相机模型的孔)
+  - $\lambda$：比例因子，用来调节三维空间点$X_w$在这条线上的位置
+
+- 两个相机在校正前和校正后的几何模型：
+
+  ![img](https://cdn.jsdelivr.net/gh/Fernweh-yang/ImageHosting@main/img/%E7%9B%B8%E6%9C%BA%E6%A0%A1%E6%AD%A3%E5%89%8D%E5%90%8E%E6%A8%A1%E5%9E%8B.webp)
+
+  - 校正前后，相机矩阵
+
+    由此可以列出校正前后的1式：o->origin, n->new
+    $$
+    X_w=c_{o1}+\lambda (K_{o1}R_{o1})^{-1}\ \overline{x}_{o1}\\
+    X_w=c_{o2}+\lambda (K_{o2}R_{o2})^{-1}\ \overline{x}_{o2}\\
+    X_w=c_{n1}+\lambda (K_{n}R_{n})^{-1}\ \overline{x}_{n1}\\
+    X_w=c_{n2}+\lambda (K_{n}R_{n})^{-1}\ \overline{x}_{n2}
+    $$
+
+    - 2个相机，校正前后，所以共4个方程
+      - $c_{o1}$：相机1的光心
+      - $c_{n1}$：校正后虚拟相机1的光心
+    - 本算法假设光心不变：$c_o=c_n$
+    - 本算法需要相机已标定：$K_o, R_o$已知
+
+  - 可见为了做两个相机的校正，我们只需要确定好新的虚拟相机的**内参数K**及**旋转矩阵R**即可。
+
+- **新虚拟相机的内参数K**：
+
+  在校正之后，我们需要两个内参数完全一致的虚拟相机，因此在Fusiello等的算法中，直接用下面的式子得到新相机的内参数：
+  $$
+  K_n=\frac{K_{o1}+K_{o2}}{2}\\
+  $$
+
+- **新虚拟相机的旋转矩阵R**：
+
+  校正之后，两个相机的方向是一致的，它们的旋转矩阵可以展开如下：
+  $$
+  R_n=\left [\begin{array}{cccc}
+  r_1^T  \\
+  r_2^T  \\
+  r_3^T  \\
+  \end{array}\right]
+  $$
+  其中：
+
+  - X轴应该平行于两个相机光心的连线，所以有：
+    $$
+    r_1=\frac{c_1-c_2}{||c_1-c_2||}
+    $$
+
+  - Y轴应该垂直于X轴和原始相机的视线方向(即原始相机坐标系的Z轴，我们用k来表达)所在的平面：
+    $$
+    r_k=k\times r_1
+    $$
+
+  - Z轴应该垂直于X轴和Y轴所在的平面
+    $$
+    r_3 = r_1\times r_2
+    $$
+
+- 最后得到校定完的像素点：
+  $$
+  \overline{x}_n=\lambda(K_nR_n)(K_oR_o)^{-1}\overline{x}_o
+  $$
+
+### 6.3 算法示意图
+
+![img](https://cdn.jsdelivr.net/gh/Fernweh-yang/ImageHosting@main/img/%E7%AB%8B%E4%BD%93%E6%A0%A1%E6%AD%A3%E7%AE%97%E6%B3%95%E5%AE%9E%E7%8E%B0.webp)
+
+### 6.4 算法代码
+
+```matlab
+function [T1,T2,Pn1,Pn2] = rectify(Po1,Po2)
+% RECTIFY: compute rectification matrices
+% factorize old PPMs
+[A1,R1,t1] = art(Po1);
+[A2,R2,t2] = art(Po2);
+% optical centers (unchanged)
+c1 = - inv(Po1(:,1:3))*Po1(:,4);
+c2 = - inv(Po2(:,1:3))*Po2(:,4);
+% new x axis (= direction of the baseline)
+v1 = (c1-c2);
+% new y axes (orthogonal to new x and old z)
+v2 = cross(R1(3,:)’,v1);
+% new z axes (orthogonal to baseline and y)
+v3 = cross(v1,v2);
+% new extrinsic parameters
+R = [v1’/norm(v1)
+v2’/norm(v2)
+v3’/norm(v3)];
+% translation is left unchanged
+% new intrinsic parameters (arbitrary)
+A = (A1 + A2)./2;
+A(1,2)=0; % no skew
+% new projection matrices
+Pn1 = A * [R -R*c1 ];
+Pn2 = A * [R -R*c2 ];
+% rectifying image transformation
+T1 = Pn1(1:3,1:3)* inv(Po1(1:3,1:3));
+T2 = Pn2(1:3,1:3)* inv(Po2(1:3,1:3));
+
+% ------------------------
+function [A,R,t] = art(P)
+% ART: factorize a PPM as P=A*[R;t]
+
+Q = inv(P(1:3, 1:3));
+[U,B] = qr(Q);
+
+R = inv(U);
+t = B*P(1:3,4);
+A = inv(B);
+A = A ./A(3,3);
+```
+
+
 
 # 四、Planare Szenen
 
