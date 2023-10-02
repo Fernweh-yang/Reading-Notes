@@ -462,3 +462,116 @@ Python 中的包（Package）和 C++ 中的命名空间（Namespace）在某种�
    ```
 
    
+
+# 5. 路径相关
+
+## 5.1 如何输出当前路径
+
+有3种方法：
+
+```python
+# 1. 返回当前工作目录的绝对路径：		  /home/workspace
+import os
+print(os.getcwd())
+
+# 2. 返回当前python脚本的绝对路径:		/home/workspace/test.py
+import sys
+print(sys.argv[0])
+
+# 3. 返回当前python脚本的绝对路径		/home/workspace/test.py
+import os
+print(os.path.abspath(__file__))
+```
+
+
+
+# 6. 如何用vscode调试
+
+## 6.1 基本流程
+
+1. 在run and debug中点`creat a launch.json file`来创建一个名为`launch.json`配置文件
+
+2. 修改配置文件
+
+   ```json
+   {
+       "version": "0.2.0",
+       "configurations": [
+           {	
+               // ****************** 必须项： ******************
+               "name": "Python: Run My Module", 	// 配置名称，将在调试配置下拉列表中显示
+               "type": "python", 					// 调试类型，这里是Python
+               "request": "launch", 				// 请求类型，这里选择“launch”表示启动调试
+               
+               "module": "my_module", 				// 要执行的Python模块名称，请替换为实际的模块名称
+               "program": "${file}",				// 要执行的python文件名称，和module只能存在一个
+               "program": "${workspaceFolder}/car_instance/test.py",	// 也可以直接如此显示的指定
+               
+               
+               "cwd": "${workspaceFolder}", 		// 当前工作目录设置为项目文件夹
+               "console": "integratedTerminal", 	// 使用VSCode的集成终端显示输出
+               
+               // ****************** 非必须项： ******************
+               "args": [], 						// 如果需要传递命令行参数，可以在这个列表中添加
+               "pythonPath": "${config:python.pythonPath}", 	// 指定Python解释器的路径
+               "env": {}, 							// 环境变量字典，可以在这里添加自定义环境变量
+               "envFile": "${workspaceFolder}/.env", 			// 如果需要从文件加载环境变量，可以指定.env文件的路径
+               "justMyCode": true, 				// 单步调试Python文件是否进入第三方库,true时不进入
+               "stopOnEntry": false, 				// 是否在程序启动时立即暂停，以便在第一行代码之前设置断点
+               "showReturnValue": true, 			// 是否在调试过程中显示函数的返回值
+               "redirectOutput": true 				// 是否将程序输出重定向到调试控制台，而不是终端
+           }
+       ]
+   }
+   ```
+
+   
+
+## 6.2 一个例子：
+
+对于执行如下shell命令：
+
+```shell
+traj=00_1
+python -W ignore::UserWarning vo_trajectory_from_folder.py \
+							--vo-model-name vonet.pkl \
+							--seg-model-name segnet-kitti.pth \
+							--kitti \
+							--kitti-intrinsics-file data/DynaKITTI/$traj/calib.txt \
+							--test-dir data/DynaKITTI/$traj/image_2 \
+							--pose-file data/DynaKITTI/$traj/pose_left.txt 
+```
+
+launch.json为：
+
+```json
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: Current File",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "cwd": "${fileDirname}",
+            "args": [
+                "--vo-model-name", "vonet.pkl",
+                "--seg-model-name", "segnet-kitti.pth",
+                "--kitti",
+                "--kitti-intrinsics-file", "data/DynaKITTI/00_1/calib.txt",
+                "--test-dir", "data/DynaKITTI/00_1/image_2",
+                "--pose-file", "data/DynaKITTI/00_1/pose_left.txt"
+            ],
+            "env": {
+                "PYTHONWARNINGS": "ignore::UserWarning"
+            }
+        }
+    ]
+}
+```
+
