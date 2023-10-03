@@ -1743,3 +1743,104 @@ $$
 [osqp-eigen](https://github.com/robotology/osqp-eigen)
 
 ## 2. 使用
+
+
+
+# OpenGL库
+
+## 1. 安装
+
+- 根据[官网](https://en.wikibooks.org/wiki/OpenGL_Programming/Installation/Linux)：
+
+```
+sudo apt-get install build-essential libgl1-mesa-dev
+sudo apt-get install libglew-dev libsdl2-dev libsdl2-image-dev libglm-dev libfreetype6-dev
+sudo apt-get install libglfw3-dev libglfw3
+```
+
+- 额外的一些库：
+
+  - OpenGL核心库，GL
+
+    ```
+    COPYsudo apt-get install libgl1-mesa-dev
+    ```
+
+  - OpenGL实用函数库，GLU
+
+    ```
+    COPYsudo apt-get install libglu1-mesa-dev
+    ```
+
+  - OpenGL实用工具包，GLUT
+
+    ```
+    COPYsudo apt-get install freeglut3-dev
+    ```
+
+- 验证是否安装好：
+
+  ```
+  sudo apt install mesa-utils
+  glxinfo | grep OpenGL
+  ```
+
+
+
+## 2. 简单的cpp例子
+
+### 2.1 代码
+
+```c++
+// test.cpp
+#include<GL/glut.h>
+#include<stdlib.h>
+// 初始化材料属性、光源属性、光照模型，打开深度缓冲区
+void init(){
+    GLfloat mat_specular [] = { 1.0, 1.0, 1.0, 1.0 };
+    GLfloat mat_shininess [] = { 50.0 };
+    GLfloat light_position [] = { 1.0, 1.0, 1.0, 0.0 };
+    glClearColor(0.0, 0.0, 0.0, 0.0);
+    glShadeModel(GL_SMOOTH);
+    glMaterialfv(GL_FRONT, GL_SPECULAR, mat_specular);
+    glMaterialfv(GL_FRONT, GL_SHININESS, mat_shininess);
+    glLightfv(GL_LIGHT0, GL_POSITION, light_position);
+    glEnable(GL_LIGHTING);
+    glEnable(GL_LIGHT0);
+    glEnable(GL_DEPTH_TEST);
+}
+// 调用GLUT函数，绘制一个球
+void display(){
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glutSolidSphere(1.0, 40, 50);
+    glFlush();
+}
+
+int main(int argc, char** argv){
+    // GLUT环境初始化
+    glutInit(&argc, argv);
+    // 显示模式初始化
+    glutInitDisplayMode(GLUT_SINGLE | GLUT_RGB | GLUT_DEPTH);
+    // 定义窗口大小
+    glutInitWindowSize(300, 300);
+    // 定义窗口位置
+    glutInitWindowPosition(100, 100);
+    // 显示窗口，窗口标题为执行函数名 */
+    glutCreateWindow(argv[0]);
+    // 调用OpenGL初始化函数
+    init();
+    // 注册OpenGL绘图函数
+    glutDisplayFunc(display);
+    // 进入GLUT消息循环，开始执行程序
+    glutMainLoop();
+    return 0;
+}
+```
+
+### 2.2 编译
+
+```
+g++ -o test test.cpp -lGL -lGLU -lglut
+./test
+```
+
