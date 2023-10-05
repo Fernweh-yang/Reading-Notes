@@ -159,11 +159,9 @@
      比如:
    
      ```shell
-     ./Examples/Monocular/mono_tum Vocabulary/ORBvoc.txt \
-     							  Examples/Monocular/TUM2.yaml \
-                                   /home/yang/Datasets/TUM/rgbd_dataset_freiburg2_xyz 
+     ./Examples/Monocular/mono_tum Vocabulary/ORBvoc.txt Examples/Monocular/TUM2.yaml /media/yang/OS/Datasets/TUM/rgbd_dataset_freiburg2_xyz
      ```
-   
+     
      
    
    - RGB-D Examples:

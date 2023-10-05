@@ -948,3 +948,35 @@ void SmartPointerDemo2()
   ```
   
   
+
+# C++小功能
+
+## 1. 按空格分割字符串
+
+1. 直接用stringsream来直接分割
+
+   ```c++
+   int main(){
+       ifstream f;
+       f.open("/home/yang/Desktop/testeverything/c++/normal_test/test.txt");
+       
+       while (!f.eof())
+       {
+           // 可以是从文件里读的，也可以是直接一个字符串，都可以直接分割
+           string s = "1311867170.462290 rgb/1311867170.462290.png";
+           // getline(f,s);
+           // cout << s << endl;
+           if(!s.empty()){
+               stringstream ss;
+               ss <<s;
+               double t;
+               string sRGB;
+               ss >> t;
+               ss >> sRGB;
+               cout << t << endl << sRGB << endl;
+           }
+       }
+   }
+   ```
+
+   
