@@ -1,4 +1,39 @@
+# 卸载安装编译
+
+## 1. 源码安装
+
+1. 从[官方git](https://github.com/google-deepmind/mujoco)下载最新release: Source code
+
+2. 解压后编译安装
+
+   ```shell
+   cd xx/mujoco-2.3.7
+   mkdir build
+   cd build
+   cmake .. #配置cmake
+   cmake --build . #编译
+   cmake .. -DCMAKE_INSTALL_PREFIX=/opt/mujoco #安装位置设为/opt/mujoco
+   cmake --install . #安装
+   ```
+
+## 2. 预编译安装
+
+1. 从[官方git](https://github.com/google-deepmind/mujoco)下载最新release: mujoco-2.3.x-linux-x86_64.tar.gz
+
+2. 解压后就可以用了
+   ```
+   cd mujoco-2.3.7/bin
+   ./simulate ../model/car/car.xml
+   ```
+
+## 3. 编译自己的代码
+
+- 官方的[CMakeLists.txt]()参考
+- 也可以直接写[Makefile](https://github.com/Fernweh-yang/HIWI_Programming_Robots/blob/main/mujoco-2.3.5/task6/makefile)
+  - 我这里写的编译完后的可执行文件在`mujoco-2.3.7/bin`中
+
 # 基本概念
+
 ## 介绍
 - MuJoCo可用于基于模型的计算：
 
