@@ -1,3 +1,53 @@
+# 0.如何修改默认的python版本
+
+- 查看python版本
+
+  - 当前计算机有的版本：
+
+    ```
+    ls /usr/bin/python*
+    ```
+
+  - 当前系统默认的pytrhon版本
+
+    ```
+    python -V
+    ```
+
+- 下载想要的版本：
+
+  ```
+  sudo apt-get install software-properties-common
+  
+  # 添加 python source
+  sudo add-apt-repository ppa:deadsnakes/ppa
+  sudo apt update
+  
+  # 安装 python3.8
+  sudo apt install python3.8
+  ```
+
+- 更换版本
+
+  使用 update-alternatives 命令为 Ubuntu 系统中安装的同一软件的不同版本设置优先级。具有最高优先级的 Python 版本将用作默认版本。
+
+  ```shell
+  # 将3.8设为第一优先级
+  sudo update-alternatives --install /usr/bin/python python /usr/bin/python3.8 1
+  # 将3.10设为第二优先级
+  sudo update-alternatives --install /usr/bin/python python /usr/bin/python3.10 2
+  ```
+
+  手动切换版本
+
+  ```
+  sudo update-alternatives --config python
+  # 然后输入想要的python数值
+  python --version
+  ```
+
+  
+
 # 1.如何打包python项目
 
 - 资料总结：
