@@ -734,7 +734,6 @@ Perspective Projection透视投影 with a Calibrated标定的 Camera
     \end{bmatrix}
     $$
     
-  
   - $K_f$：Focal Length Matrix。将图像坐标系转为像素坐标系
     $$
     K_f=\begin{bmatrix}
@@ -873,7 +872,6 @@ $$
   x=KX_C
   $$
   
-
 - **外参矩阵**：
 
   上面的公式6：
@@ -3044,4 +3042,126 @@ $$
 
 
 
-# 
+
+
+# 六、图像金字塔
+
+## 1. 基本概念
+
+**图像金字塔（Image Pyramid）**
+
+- 是一种多尺度表示图像的技术，旨在使图像在不同尺度下都能被有效地处理。
+
+- 金字塔是由一系列不同分辨率的图像构成，这些图像根据尺度从粗糙到精细排列。每一层图像来自同一张原始图像，是原始图像在不同尺度上的版本。
+
+- 如下图所示：层级越高，图像越小，分辨率越低
+
+  ![img](https://cdn.jsdelivr.net/gh/Fernweh-yang/ImageHosting@main/img/%E5%9B%BE%E5%83%8F%E9%87%91%E5%AD%97%E5%A1%94.bmp)
+
+**什么是尺度：**
+
+- 通常指的是图像中物体或特征的大小相对于参考尺寸的变化程度。尺度可以是物理尺寸，也可以是图像中像素的数量。
+
+**主要有两类图像金字塔：**
+
+- 高斯金字塔(Gaussian pyramid): 通过对原始图像进行多次下采样和高斯模糊构建。
+
+  目的：减小图像的尺寸，同时保持主要特征。每一层都比前一层缩小，同时变得更模糊。
+
+- 拉普拉斯金字塔(Laplacian pyramid): 由高斯金字塔向上采样得到。
+
+  目的：图像重建和尺度空间分析。
+
+**向上或向下采样：**
+
+- 向上upsampling：将图像的分辨率增加，通常通过插值技术在图像中插入新的像素来实现。这可以看作是放大图像的操作。
+- 向下downsampling：将图像的分辨率降低，通常通过减少图像中的像素数量来实现。这可以看作是缩小图像的操作。
+
+**OpenCV提供的两种缩放图像尺寸函数：**
+
+- [resize()](https://docs.opencv.org/3.4/da/d54/group__imgproc__transform.html#ga47a974309e9102f5f08231edc7e7529d)：用于向上向下采样
+
+- [pyrUp()](https://docs.opencv.org/3.4/d4/d86/group__imgproc__filter.html#gada75b59bdaaca411ed6fee10085eb784)：对图像向上采样，即从金字塔高层级3->低层级0
+
+  [pyrDown()](https://docs.opencv.org/3.4/d4/d86/group__imgproc__filter.html#gaf9bba239dfca11654cb7f50f889fc2ff)：对图像向下采样，即从金字塔低层级0->高层级3
+
+  注意：
+
+  - PryUp和PryDown不是互逆的，即PryUp不是降采样的逆操作。
+  - PryDown( )是一个会丢失信息的函数，想获得丢失的信息就需要借助拉普拉斯金字塔
+
+
+
+## 2. 高斯金字塔
+
+- 结构：
+
+  - 第K层高斯金字塔通过高斯平滑、亚采样就可以获得K+1层高斯图像
+
+    > **高斯平滑**:一种图像平滑操作，它使用高斯滤波器来减小图像中的噪声和细节。
+    >
+    > ​	**高斯滤波器**: 即高斯内核卷积，是一个线性滤波器，它对图像中的每个像素应用高斯权重，以便使像素与其周围像素的平均值更加平滑。
+    >
+    > **亚采样**: 一种降低图像分辨率的操作，也称为向下采样。图像的每个区域或像素在新的图像中只保留一个或少数几个样本。
+
+  - 高斯金字塔包含了一系列低通滤波器，其截至频率从上一层到下一层是以因子2逐渐增加，所以高斯金字塔可以跨越很大的频率范围。
+
+- 由k层向下采样，得到k+1层图像的步骤：
+
+  1. 对k层的图像进行高斯内核$\mathcal{G}_{5\times5}$卷积
+
+  2. 将所有的偶数行和列去除
+
+- 由k曾向上采样，得到新的k-1层图像的步骤：
+
+  1. 将图像在每个方向扩大为原来的两倍，新增的行和列以0填充
+  2. 使用先前同样的内核(乘以4)与放大后的图像卷积，获得 “新增像素”的近似值
+
+  但！得到的放大后的图像与原来的图像相比会发觉比较**模糊**，因为在缩放的过程中已经**丢失了一些信息**，如果想在缩小和放大整个过程中减少信息的丢失，这些数据形成了拉普拉斯金字塔。
+
+## 3. 拉普拉斯金字塔
+
+- 拉普拉斯金字塔第i层的数学定义：
+  $$
+  L_i = G_i-UP(G_{i+1})\otimes \mathcal{G}_{5\times5}\tag{1}
+  $$
+
+  - $G_i$：表示第i层的图像
+  - $UP()$：将源图像中位置为(x,y)的像素映射到目标图像的(2x+1,2y+1)位置，即向上取样
+  - $\otimes$：卷积
+  - $\mathcal{G}_{5\times5}$：5x5的高斯内核，和高斯金字塔下采样用的一致
+
+  OpenCV提供的[pyrUp()](https://docs.opencv.org/3.4/d4/d86/group__imgproc__filter.html#gada75b59bdaaca411ed6fee10085eb784)函数就是在执行1式的第二部分，即$L_i=G_i-PyrUp(G_{i+1})$
+
+- 与高斯金字塔的联系：
+
+  ![img](https://cdn.jsdelivr.net/gh/Fernweh-yang/ImageHosting@main/img/%E9%AB%98%E6%96%AF%E6%8B%89%E6%99%AE%E6%8B%89%E6%96%AF%E9%87%91%E5%AD%97%E5%A1%94.jpeg)
+
+  - 第一/三列是高斯金字塔，第二列是拉普拉斯金字塔
+  - 可以将拉普拉斯金字塔理解为高斯金字塔的逆形式。
+
+## 4. resize()函数的例子
+
+- [resize()](https://docs.opencv.org/3.4/da/d54/group__imgproc__transform.html#ga47a974309e9102f5f08231edc7e7529d)：
+
+  ```c++
+  // C++
+  void cv::resize	(	
+  InputArray 		src,		// 输入图像
+  OutputArray 	dst,		// 输出图像
+  Size 			dsize,		// 输出图像的大小
+  double 			fx = 0,		// 水平horizontal轴缩放系数
+  double 			fy = 0,		// scale factor along the vertical axis
+  int 			interpolation = INTER_LINEAR // 可以使用的插值方法：https://docs.opencv.org/3.4/da/d54/group__imgproc__transform.html#ga5bb5a1fea74ea38e1a5445ca803ff121
+  )		
+  ```
+
+  ```python
+  # python
+  cv.resize(	src, dsize[, dst[, fx[, fy[, interpolation]]]]	) ->	dst
+  ```
+
+  
+
+
+
