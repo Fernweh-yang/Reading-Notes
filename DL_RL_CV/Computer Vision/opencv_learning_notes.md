@@ -30,15 +30,6 @@ C++ Tutorial:https://docs.opencv.org/4.7.0/d9/df8/tutorial_root.html
      mv ./opencv_contrib-4.7.0 /home/yang/opencv
      ```
 
-  3. 安装依赖
-
-     ```
-     $ sudo apt-get install cmake git libgtk2.0-dev pkg-config libavcodec-dev libavformat-dev libswscale-dev python-dev python-numpy libtbb2 libtbb-dev libjpeg-dev libpng-dev libtiff-dev libdc1394-22-dev build-essential mlocate
-     $ sudo add-apt-repository "deb http://security.ubuntu.com/ubuntu xenial-security main"
-     $ sudo apt update
-     $ sudo apt install libjasper1 libjasper-dev
-     ```
-
   4. 编译
 
      ```
@@ -51,45 +42,45 @@ C++ Tutorial:https://docs.opencv.org/4.7.0/d9/df8/tutorial_root.html
      - 修改路径为/usr/local/opencv4.7.0
 
        否则默认各部分分别安装在`/usr/local/`目录的`include`，`bin`，`lib`3个文件夹下。
-
+  
      - `-D OPENCV_GENERATE_PKGCONFIG=YES`开启支持使用`pkg-config`功能
-
+  
        - 就可以用`pkg-config --libs opencv4`来查看
-
+  
   5. 设置pkg-config
-
+  
      将/usr/local/opencv4.7.0/lib/pkgconfig/加到PKG_CONFIG_PATH中去
-
+  
      ```
      sudo vim /etc/profile.d/pkgconfig.sh
      ```
-
+  
      填入：`export PKG_CONFIG_PATH=/usr/local/opencv4.7.0/lib/pkgconfig:$PKG_CONFIG_PATH`
-
+  
      激活配置：
-
+  
      ```
      source /etc/profile
      ```
-
+  
   6. 动态库环境
-
+  
      创建一个动态库环境配置文件:opencv.conf
-
+  
      ```
      sudo vim /etc/ld.so.conf.d/opencv.conf
      ```
-
+  
      填入:`/usr/local/opencv4.7.0/lib`
-
+  
      生效配置：
-
+  
      ```
      sudo ldconfig
      ```
-
+  
   7. 修改bashrc
-
+  
      ```
      gedit ~/.bashrc
      # 填入下面2行：
@@ -97,7 +88,7 @@ C++ Tutorial:https://docs.opencv.org/4.7.0/d9/df8/tutorial_root.html
      	export LD_LIBRARY_PATH=/usr/local/opencv4.7.0/lib
      source ~/.bashrc
      ```
-
+  
 - Install for python: 
 
   在conda某一环境下：

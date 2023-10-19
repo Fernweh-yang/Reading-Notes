@@ -3149,7 +3149,7 @@ $$
   void cv::resize	(	
   InputArray 		src,		// 输入图像
   OutputArray 	dst,		// 输出图像
-  Size 			dsize,		// 输出图像的大小
+  Size 			dsize,		// 输出图像的大小, dsize 和 fx,fy 这两组参数只有一组可以为0，dsize设为0时，dsize由fxfy计算而来，反之亦然
   double 			fx = 0,		// 水平horizontal轴缩放系数
   double 			fy = 0,		// scale factor along the vertical axis
   int 			interpolation = INTER_LINEAR // 可以使用的插值方法：https://docs.opencv.org/3.4/da/d54/group__imgproc__transform.html#ga5bb5a1fea74ea38e1a5445ca803ff121
@@ -3161,7 +3161,138 @@ $$
   cv.resize(	src, dsize[, dst[, fx[, fy[, interpolation]]]]	) ->	dst
   ```
 
+- 一个例子:
+
+  用resize()来放大缩小图片
+
+  ```c++
+  #include <opencv2/opencv.hpp>  
+  #include <opencv2/imgproc/imgproc.hpp>  
+    
+  using namespace cv;  
+  
+  int main( )  
+  {  
+      //载入原始图     
+      Mat srcImage = imread("1.jpg");  
+      Mat tmpImage,dstImage1,dstImage2;	//临时变量和目标图的定义  
+      tmpImage=srcImage;					//将原始图赋给临时变量  
+    
+      //显示原始图    
+      imshow("【原始图】", srcImage);    
+    
+      //进行尺寸调整操作  
+      resize(tmpImage,dstImage1,Size( tmpImage.cols/2, tmpImage.rows/2 ),(0,0),(0,0),3);  
+      resize(tmpImage,dstImage2,Size( tmpImage.cols*2, tmpImage.rows*2 ),(0,0),(0,0),3);  
+    
+      //显示效果图    
+      imshow("【效果图】之一", dstImage1);    
+      imshow("【效果图】之二", dstImage2);    
+    
+      waitKey(0);    
+      return 0;    
+  }  
+  ```
+
+## 5. pyrUp()函数的例子
+
+- [pyrUp()](https://docs.opencv.org/3.4/d4/d86/group__imgproc__filter.html#gada75b59bdaaca411ed6fee10085eb784)
+
+  ```c++
+  // c++
+  void cv::pyrUp	(	
+  InputArray 		src,							// 输入图像
+  OutputArray 	dst,							// 输出图像
+  const Size & 	dstsize = Size(),				// 输出图像的size
+  int 			borderType = BORDER_DEFAULT 	// Pixel extrapolation method：https://docs.opencv.org/3.4/d2/de8/group__core__array.html#ga209f2f4869e304c82d07739337eae7c5
+  )	
+  ```
+
+  ```python
+  # python
+  cv.pyrUp(	src[, dst[, dstsize[, borderType]]]	) ->	dst
+  ```
+
+- 一个例子
+
+  使用pyrUp()把输入图像放大2倍
+
+  ```c++
+  #include <opencv2/opencv.hpp>  
+  #include <opencv2/imgproc/imgproc.hpp>  
+    
+  using namespace cv;  
+  
+  int main( )  
+  {  
+      //载入原始图     
+      Mat srcImage = imread("1.jpg");  //工程目录下应该有一张名为1.jpg的素材图  
+      Mat tmpImage,dstImage;//临时变量和目标图的定义  
+      tmpImage=srcImage;//将原始图赋给临时变量  
+    
+      //显示原始图    
+      imshow("【原始图】", srcImage);    
+      //进行向上取样操作  
+      pyrUp( tmpImage, dstImage, Size( tmpImage.cols*2, tmpImage.rows*2 ) );  
+      //显示效果图    
+      imshow("【效果图】", dstImage);    
+    
+      waitKey(0);    
+    
+      return 0;    
+  }  
+  ```
+
   
 
+## 6. pytDown()函数的例子
 
+- pyrDown()](https://docs.opencv.org/3.4/d4/d86/group__imgproc__filter.html#gaf9bba239dfca11654cb7f50f889fc2ff)
 
+  ```c++
+  // c++
+  void cv::pyrDown	(	
+  InputArray 		src,				// 输入图像
+  OutputArray 	dst,				// 输出图像
+  const Size & 	dstsize = Size(),	// 输出图像大小
+  int 			borderType = BORDER_DEFAULT 	// Pixel extrapolation method
+  )	
+  ```
+
+  ```python
+  # Python
+  cv.pyrDown(	src[, dst[, dstsize[, borderType]]]	) ->	dst
+  ```
+
+- 一个例子
+
+  将原始图像缩小一倍
+
+  ```c++
+  #include <opencv2/opencv.hpp>  
+  #include <opencv2/imgproc/imgproc.hpp>  
+    
+    
+  using namespace cv;  
+  
+  int main( )  
+  {  
+      //载入原始图     
+      Mat srcImage = imread("1.jpg");  //工程目录下应该有一张名为1.jpg的素材图  
+      Mat tmpImage,dstImage;//临时变量和目标图的定义  
+      tmpImage=srcImage;//将原始图赋给临时变量  
+    
+      //显示原始图    
+      imshow("【原始图】", srcImage);    
+      //进行向下取样操作  
+      pyrDown( tmpImage, dstImage, Size( tmpImage.cols/2, tmpImage.rows/2 ) );  
+      //显示效果图    
+      imshow("【效果图】", dstImage);    
+    
+      waitKey(0);    
+    
+      return 0;    
+  }  
+  ```
+
+  
