@@ -8,6 +8,13 @@
 
 # 2.安装Nvidia驱动
 
+## 2.1 卸载旧驱动
+
+1. `sudo apt-get --purge remove nvidia*`
+2. `sudo apt autoremove`
+
+## 2.2 安装新区东
+
 - 注意安装的版本
 
   要和下面的cudnn/cuda版本相匹配
@@ -21,14 +28,16 @@
      1. choose on driver to install automatically
      2. `reboot`
 
-  2. install driver from official website
+  2. install driver from [official website](https://www.nvidia.cn/Download/index.aspx?lang=cn)
 
      1. diable Nouveau kernel driver
+
+        输入`lsmod | grep nouveau`如果无返回，就是已经禁用了
 
         - `sudo gedit /etc/modprobe.d/blacklist-nouveau.conf`
 
           add the following contents
-
+     
           ```
           blacklist nouveau
           options nouveau modeset=0
@@ -43,7 +52,7 @@
         `https://www.nvidia.cn/Download/index.aspx?lang=cn#`
 
         - `sudo chmod +x NVIDIA-Linux-x86_64-515.76.run `
-
+     
         - `sudo ./NVIDIA-Linux-x86_64-515.76.run `
 
 # 3.安装cuda
