@@ -4549,16 +4549,123 @@ ICP存在唯一解和无穷多解的情况，唯一解时，只要能找到极�
 
   1. 保留特征点但只计算关键点不计算描述子，同时使用**光流法(Optical Flow)**跟踪特征点的运动。
 
-     这样可以避免计算匹配描述子，而光流法的计算时间小于计算匹配描述子的时间
+     - 这样可以避免计算匹配描述子，而光流法的计算时间小于计算匹配描述子的时间。
+
+     - 这种方法仍然使用特征点，只是把匹配描述子替换成了光流跟踪，估计相机运动时仍然使用对极几何、pnp或icp算法。
 
   2. 在计算关键点不计算描述子的同时不保留特征点，同时使用**直接法(Direct Method)**计算特征点的下一时刻图像中的位置。
 
-     这可以省去计算描述子的时间，也省去了计算光流的时间。
+     - 这可以省去计算描述子的时间，也省去了计算光流的时间。
+     - 直接法会根据图像的**像素灰度信息**同时估计相机运动和点的投影，不要求提取到的点必须为角点。
 
 - 直接法相比特征点法：
 
-  - 直接法会根据图像的**像素灰度信息**同时估计相机运动和点的投影，不要求提取到的点必须为角点。
-  - 直接法不需要知道点和点之间的对应关系，而是通过最小化**光度误差(Photometric error)**来求他们。
+  - 特征点法中通过最小化**重投影误差(reprojection error)**来优化相机运动。因此需要特征匹配来准确的知道空间点在两个相机中投影后的像素坐标。
+  
+  - 直接法不需要知道点和点之间的对应关系，而是通过最小化**光度误差(Photometric error)**来同时优化位姿和地图。
+  
+    > 最小光度误差：通过比较像素值或图像亮度之间的差异来计算，它可以采用不同的度量方式，如均方误差（Mean Squared Error，MSE）或绝对误差（Absolute Error）等
+  
+  - 根据使用像素的数量，直接法可以分为稀疏、稠密和半稠密3种。因此相比特征点法只能重构稀疏特征点(稀疏地图)，直接法还具有恢复稠密/半稠密结构的能力
+  
+- 使用直接法的开源项目有：[SVO](https://github.com/uzh-rpg/rpg_svo),[LSD-SLAM](https://github.com/tum-vision/lsd_slam),[DSO](https://github.com/JakobEngel/dso)
+
+## 2. 2D 光流
+
+直接法由光流演变而来，光流描述了像素在图像中的运动，而直接法则另外附带一个相机的运动。
+
+光流是一种描述像素随时间在图像之间运动的方法：
+
+- 计算部分像素运动的为 **稀疏光流** 
+
+  以Lucas-Schunck光流为代表
+
+- 计算所有像素的为 **稠密光流**
+
+  以Horn-schunck光流为代表
+
+### 2.1 Lucas-Kanade光流
+
+![image-20230720002307204](https://raw.githubusercontent.com/Fernweh-yang/ImageHosting/main/img/202307200023269.png)
+
+<center style="color:#C125C0C0">图1: LK光流法示意图</center>
+
+- 光流法有个假设：（现实中很难成立）
+
+  - **灰度不变假设**
+    $$
+    I(x(t),y(t),t)=Constant \tag{1}
+    $$
+    对于小运动
+    $$
+    I(x+udt,y+vdt,t+dt)=I(x,y,t) \tag{2}
+    $$
+
+    - $(u,v)$：光流速度 optical flow(velocity)
+    - $(dx,dy)=(udt,vdt)$：变换displacement
+
+  - 因为光流速度有x,y轴2个方向，所以为了计算u,v还需要假设：**某一个窗口内的像素具有相同的运动**
+
+- 计算像素的运动：
+
+  1. 将上面的2式泰勒展开
+     $$
+     \mathbf{I}(x+dx,y+dy,t+dt)\approx\mathbf{I}(x,y,t)+\frac{\partial\mathbf{I}}{\partial x}dx+\frac{\partial\mathbf{I}}{\partial y}dy+\frac{\partial\mathbf{I}}{\partial t}dt \tag{3}
+     $$
+
+  2. 由于灰度不变假设所以3式的右边第二部分为0：
+     $$
+     \frac{\partial\mathbf{I}}{\partial x}dx+\frac{\partial\mathbf{I}}{\partial y}dy+\frac{\partial\mathbf{I}}{\partial t}dt=0 \tag{4}
+     $$
+
+  3. 两边同时除以dt，就得到了像素在x，y轴上的速度
+     $$
+     \begin{align}
+     \frac{\partial\mathbf{I}}{\partial x}\frac{dx}{dt}+\frac{\partial\mathbf{I}}{\partial y}\frac{dy}{dt} &=-\frac{\partial\mathbf{I}}{\partial t} \tag{5} \\
+     \mathbf{I}_xu+\mathbf{I}_yv&=-\mathbf{I}_t
+     \end{align}
+     $$
+
+     - $u=\frac{dx}{dt},v=\frac{dy}{dt}$：像素在x轴和y轴上的速度，也就是我们想要计算的量
+     - $\mathbf{I}_x=\frac{\partial \mathbf{I}}{\partial x},\mathbf{I}_y=\frac{\partial \mathbf{I}}{\partial y}$：图像灰度在该点处x和y方向的梯度
+     - $\mathbf{I}_t=\frac{\partial \mathbf{I}}{\partial t}$：图像灰度对时间的变化量极为
+
+  4. 根据第二个假设：某一个窗口内的像素具有相同的运动
+
+     - 考虑一个w x w的窗口，对于$w^2$个像素，就有$w^2$个5式，写成向量形式：
+       $$
+       [\mathbf{I}_x\ \ \mathbf{I}_y]_k\left [\begin{array}{cccc}
+       u \\
+       v \\
+       \end{array}\right]=-\mathbf{I}_{tk},\ \ \ k=1,\cdots,w^2 \tag{6}
+       $$
+
+     - 用A,b代指这$w^2$个光度梯度，由此可以得到一个关于u,v的超定线性方程：
+       $$
+       \mathbf{A}\left [\begin{array}{cccc}
+       u \\
+       v \\
+       \end{array}\right]=-\mathbf{b}\tag{7}
+       $$
+
+       > 超定线性方程: 如果一个线性方程组包含n个未知数，但包含m个线性方程，其中m < n，那么这个方程组就是超定的。
+       >
+       > 比如7式是1个方程，对应2个未知数，所以是超定的。
+
+     - 超定线性方程通常使用最小二乘法来求解：
+       $$
+       \left [\begin{array}{cccc}
+       u \\
+       v \\
+       \end{array}\right]^*=-(\mathbf{A}^T\mathbf{A})^{-1}\mathbf{A}^T\mathbf{b}
+       $$
+
+
+## 3. 实践：LK光流
+
+### 3.1 代码
+
+### 3.2 编译
 
 # 九、后端优化：BA图优化
 
