@@ -2658,7 +2658,7 @@ end
   
   scene point在image sequence中保持亮度不变
   $$
-  I(x(t),y(t)t)=Constant \tag{1}
+  I(x(t),y(t),t)=Constant \tag{1}
   $$
   
 - Small motion
