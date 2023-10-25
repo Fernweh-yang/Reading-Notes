@@ -4665,7 +4665,527 @@ ICP存在唯一解和无穷多解的情况，唯一解时，只要能找到极�
 
 ### 3.1 代码
 
+```c++
+#include <opencv2/opencv.hpp>
+#include <string>
+#include <chrono>
+#include <Eigen/Core>
+#include <Eigen/Dense>
+ 
+using namespace std;
+using namespace cv;
+ 
+string file_1 = "../LK1.png";  // first image
+string file_2 = "../LK2.png";  // second image
+ 
+// ! Optical flow tracker and interface  光流跟踪
+class OpticalFlowTracker {
+public:
+    OpticalFlowTracker(
+        const Mat &img1_,               // 图像1
+        const Mat &img2_,               // 图像2
+        const vector<KeyPoint> &kp1_,   // 关键点1  -> 图像 1
+        vector<KeyPoint> &kp2_,         // 关键点2  -> 图像 2
+        vector<bool> &success_,         // true if a keypoint is tracked successfully 关键点跟踪是正确的
+        bool inverse_ = true, bool has_initial_ = false) :  // bool型变量 判断是否采用反向光流(使用当前图像和上一帧图像)
+        img1(img1_), img2(img2_), kp1(kp1_), kp2(kp2_), success(success_), inverse(inverse_),
+        has_initial(has_initial_) {}
+ 
+    /*
+        cv::Range数据结构，用于表示一维数据范围，通常用于图像和矩阵的子区域访问。
+            有两个关键的变量start和end，分别表示范围的起始和结束位置
+            Range表示范围从start到end，包含start，但不包含end
+    */
+    void calculateOpticalFlow(const Range &range);
+
+private:
+    const Mat &img1;
+    const Mat &img2;
+    const vector<KeyPoint> &kp1;
+    vector<KeyPoint> &kp2;
+    vector<bool> &success;
+    bool inverse = true;
+    bool has_initial = false;
+};
+
+// ! 使用高斯牛顿法求解图像2中相应的角点坐标
+void OpticalFlowTracker::calculateOpticalFlow(const Range &range) {
+    // parameters
+    int half_patch_size = 4;
+    int iterations = 10;        // 最大迭代次数
+    // 对图像1中的每个GFTT角点进行高斯牛顿优化
+    for (size_t i = range.start; i < range.end; i++)
+    {
+        auto kp = kp1[i];
+        double dx = 0, dy = 0;  // 如果不使用初值，则dx，dy为0，即初值为图1关键点坐标系
+        if (has_initial)        // 如果kp2进行了初始化，则执行：第二张图特征点坐标-第一张图特征点坐标
+        {
+            dx = kp2[i].pt.x - kp.pt.x;
+            dy = kp2[i].pt.y - kp.pt.y;
+        }
+        double cost = 0, lastCost = 0;
+        bool succ = true; // indicate if this point succeeded
+        
+        // * Gauss-Newton iterations
+        Eigen::Matrix2d H = Eigen::Matrix2d::Zero();    // hessian 将H初始化为0
+        Eigen::Vector2d b = Eigen::Vector2d::Zero();    // bias 将b初始化为0
+        Eigen::Vector2d J;                              // jacobian 雅克比矩阵J
+        for (int iter = 0; iter < iterations; iter++) {
+            if (inverse == false) 
+            {   
+                // 普通光流法H，b都重置，因为每次循环它们是变化的
+                H = Eigen::Matrix2d::Zero();
+                b = Eigen::Vector2d::Zero();
+            } 
+            
+            else 
+            {
+                // 反向光流法只重置b，因为反向光法H不变（雅克比矩阵J不变）
+                b = Eigen::Vector2d::Zero();
+            }
+            cost = 0;   // 代价初始化为0 
+
+            // ** compute cost and jacobian 计算代价和雅克比矩阵
+            for (int x = -half_patch_size; x < half_patch_size; x++)
+                for (int y = -half_patch_size; y < half_patch_size; y++)  //x,y是patch内遍历
+                {
+                    /*
+                        计算误差：eij = I1(u+i,v+j)-I2(u+i+Δu,v+j+Δv)
+                                        i  -> kp.pt.x
+                                        j  -> kp.pt.y
+                                        u  -> x
+                                        v  -> y
+                                        Δu -> dx
+                                        Δv -> dy
+                                        Jacobian
+                        其中每个像素的灰度值 I 都是由双线性插值函数GetPixelValue()计算得到的
+                    */
+                    double error = GetPixelValue(img1, kp.pt.x + x, kp.pt.y + y) -
+                                   GetPixelValue(img2, kp.pt.x + x + dx, kp.pt.y + y + dy);
+                    
+                    // *** 正向光流法
+                    if (inverse == false)
+                    {   
+                        /*
+                            
+                            计算雅可比矩阵公式： 见书214公式8.10，分别对dx,dy求导
+                            J = - [ {I2( u + i + Δu + 1,  v + j + Δv    ) - I2( u + i + Δu - 1,  v + j + Δv     )}/2,
+                                     I2( u + i + Δu ,     v + j + Δv + 1) - I2( u + i + Δu,      v + j + Δv - 1 )}/2]T T表示转置
+                                    I2 -> 图像2的灰度信息
+                                    u  -> x
+                                    v  -> y
+                                    Δu -> dx    待优化变量
+                                    Δv -> dy    待优化变量
+                                    i  -> kp.pt.x
+                                    j  -> kp.pt.y
+                        */
+                        J = -1.0 * Eigen::Vector2d(
+                            0.5 * (GetPixelValue(img2, kp.pt.x + dx + x + 1, kp.pt.y + dy + y) -
+                                   GetPixelValue(img2, kp.pt.x + dx + x - 1, kp.pt.y + dy + y)),
+                            0.5 * (GetPixelValue(img2, kp.pt.x + dx + x, kp.pt.y + dy + y + 1) -
+                                   GetPixelValue(img2, kp.pt.x + dx + x, kp.pt.y + dy + y - 1))
+                        );
+                    } 
+                    // *** 反向光流法
+                    else if (iter == 0)
+                    {
+                        /*
+                            反向光流法采用图1的灰度负梯度代替图2的梯度计算，因此雅可比矩阵保持不变，只需要计算error
+                            计算雅可比矩阵公式：
+                            J = - [ {I1( u + i + 1, v + j    ) - I1( u + i - 1, v + j    )}/2,
+                                     I1( u + i,     v + j + 1) - I1( u + i ,    v + j - 1)}/2]T T表示转置
+                                I2 -> 图像2的灰度信息
+                                i -> x
+                                j -> y
+                                u  -> kp.pt.x
+                                v  -> kp.pt.y
+                        */
+                        J = -1.0 * Eigen::Vector2d(
+                            0.5 * (GetPixelValue(img1, kp.pt.x + x + 1, kp.pt.y + y) -
+                                   GetPixelValue(img1, kp.pt.x + x - 1, kp.pt.y + y)),
+                            0.5 * (GetPixelValue(img1, kp.pt.x + x, kp.pt.y + y + 1) -
+                                   GetPixelValue(img1, kp.pt.x + x, kp.pt.y + y - 1))
+                        );
+                    }
+                    // compute H, b and set cost;
+                    // 所有像素点构成的高维的H，b，cost与累加求和的H，b，cost是等价的
+                    // 这里选择采用求和的方式
+                    b += -error * J;            // b = -Jij * eij(累加和)
+                    cost += error * error;      // cost = || eij ||2 2范数
+                    if (inverse == false || iter == 0) {
+                        // also update H
+                        H += J * J.transpose(); // H = Jij Jij(T)(累加和)
+                    }
+                }
+
+            // compute update
+            //使用eigen库的Cholesky分解来求解增量方程H*update=b
+            Eigen::Vector2d update = H.ldlt().solve(b);
+            if (std::isnan(update[0]))//计算出来的更新量是非数字，光流跟踪失败，退出GN迭代
+            {
+                // sometimes occurred when we have a black or white patch and H is irreversible
+                cout << "update is nan" << endl;
+                succ = false;
+                break;
+            }
+            if (iter > 0 && cost > lastCost) //代价不再减小，退出GN迭代
+            {
+                break;
+            }
+            // update dx, dy 更新优化变量和lastCost
+            dx += update[0];
+            dy += update[1];
+            lastCost = cost;
+            succ = true;
+            if (update.norm() < 1e-2) //更新量的模小于1e-2，退出GN迭代
+            {
+                // converge
+                break;
+            }
+        }//GN法进行完一次迭代
+        success[i] = succ;
+        // set kp2
+        kp2[i].pt = kp.pt + Point2f(dx, dy);
+    }
+}
+
+
+/**
+ * ! 单层光流法single level optical flow
+ * @param [in] img1 the first image
+ * @param [in] img2 the second image
+ * @param [in] kp1 keypoints in img1
+ * @param [in|out] kp2 keypoints in img2, if empty, use initial guess in kp1
+ * @param [out] success true if a keypoint is tracked successfully
+ * @param [in] inverse use inverse formulation?
+ */
+void OpticalFlowSingleLevel(
+    const Mat &img1,
+    const Mat &img2,
+    const vector<KeyPoint> &kp1,
+    vector<KeyPoint> &kp2,
+    vector<bool> &success,
+    bool inverse = false,//use inverse formulation?
+    bool has_initial_guess = false
+);
+
+
+/**
+ * ! 多层光流法multi level optical flow, scale of pyramid is set to 2 by default
+ * the image pyramid will be create inside the function
+ * @param [in] img1 the first pyramid
+ * @param [in] img2 the second pyramid
+ * @param [in] kp1 keypoints in img1
+ * @param [out] kp2 keypoints in img2
+ * @param [out] success true if a keypoint is tracked successfully
+ * @param [in] inverse set true to enable inverse formulation
+ */
+void OpticalFlowMultiLevel(
+    const Mat &img1,
+    const Mat &img2,
+    const vector<KeyPoint> &kp1,
+    vector<KeyPoint> &kp2,
+    vector<bool> &success,
+    bool inverse = false
+);
+
+/**
+ * ! 双线性插值求灰度值get a gray scale value from reference image (bi-linear interpolated)
+ * @brief 为什么用双线性插值求灰度值？ 因为迭代dx,dy时，他们通常不是整数的。所以求(x+dx,y+dy)附近4个整数坐标的像素点
+ * @param img
+ * @param x
+ * @param y
+ * @return the interpolated value of this pixel
+ * inline表示内联函数，它是为了解决一些频繁调用的小函数大量消耗栈空间的问题而引入的
+ */
+inline float GetPixelValue(const cv::Mat &img, float x, float y)
+{
+    // boundary check(边界检验)
+    if (x < 0) x = 0;
+    if (y < 0) y = 0;
+    if (x >= img.cols) x = img.cols - 1;    // x: 列坐标
+    if (y >= img.rows) y = img.rows - 1;    // y: 行坐标
+
+    // img.step是一个整数值，表示从图像或矩阵的一行的开头到下一行的开头之间的字节间隔
+    // img.data 是 cv::Mat 的数据指针，指向图像数据的起始地址。可以看作将图片像素展开为了一行
+    uchar *data = &img.data[int(y) * img.step + int(x)];   // 获取某一像素的内存地址
+    float xx = x - floor(x);                // floor向下取整，比如floor(3.7)=3.0， xx = 0.7
+    float yy = y - floor(y);
+
+    /* 
+    想要求得w点的灰度值,abcd为4个距离w最近的像素点
+    b                   c
+       
+        w
+    
+    a                   d
+    */
+    return float(
+        (1 - xx) * (1 - yy) * data[0] +     // data[0] : a点
+        xx * (1 - yy) * data[1] +           // data[1] : d点
+        (1 - xx) * yy * data[img.step] +    // data[img.step：b点
+        xx * yy * data[img.step + 1]        // data[img.step+1]：c点
+    );
+}
+ 
+/**
+ * ! 单层光流法
+ * @brief 
+ * 
+ * @param img1 
+ * @param img2 
+ * @param kp1 
+ * @param kp2 
+ * @param success 
+ * @param inverse 
+ * @param has_initial 
+ */
+void OpticalFlowSingleLevel(
+    const Mat &img1,
+    const Mat &img2,
+    const vector<KeyPoint> &kp1,
+    vector<KeyPoint> &kp2,
+    vector<bool> &success,
+    bool inverse, bool has_initial) 
+{
+    kp2.resize(kp1.size());     // 用于存储第一张图特征点在第二张图中对应的的特征点
+    success.resize(kp1.size()); // 记录每个点是否成功
+    OpticalFlowTracker tracker(img1, img2, kp1, kp2, success, inverse, has_initial);
+    /*
+        parallel_for_ 是OpenCV中用于并行化图像处理任务的函数，它通过多线程执行指定的操作，以加速图像处理。 
+        这里并行调用OpticalFlowTracker::calculateOpticalFlow()
+        Range(0, kp1.size())：要处理的数据范围
+        bind(xx,xx)：将calculateOpticalFlow 函数绑定到 OpticalFlowTracker 类的实例 tracker 上，然后作为并行处理运行的函数
+                     placeholders::_1 将在 calculateOpticalFlow 中接收一个整数值，用于指示当前处理的关键点的索引。
+    */
+    parallel_for_(Range(0, kp1.size()),
+                  std::bind(&OpticalFlowTracker::calculateOpticalFlow, &tracker, placeholders::_1));
+}
+
+
+//对图像1中的所有角点都完成了光流跟踪
+/**
+ * ! 多层光流法
+ * @brief 
+ * 
+ * @param img1 
+ * @param img2 
+ * @param kp1 
+ * @param kp2 
+ * @param success 
+ * @param inverse 
+ */
+void OpticalFlowMultiLevel(
+    const Mat &img1,
+    const Mat &img2,
+    const vector<KeyPoint> &kp1,
+    vector<KeyPoint> &kp2,
+    vector<bool> &success,
+    bool inverse) {
+    // parameters
+    int pyramids = 4;           // 金字塔层数为4
+    double pyramid_scale = 0.5; // 每层之间的缩放因子设为0.5
+    double scales[] = {1.0, 0.5, 0.25, 0.125};
+
+    chrono::steady_clock::time_point t1 = chrono::steady_clock::now();  // 开始计时
+    vector<Mat> pyr1, pyr2;     // image pyramids pyr1 -> 图像1的金字塔 pyr2 -> 图像2的金字塔    
+    // *1. create pyramids 开始创建图像金字塔
+    for (int i = 0; i < pyramids; i++) {
+        if (i == 0) // 最底层是原始图像
+        {
+            pyr1.push_back(img1);
+            pyr2.push_back(img2);
+        } 
+        else 
+        {
+            Mat img1_pyr, img2_pyr;
+            //使用resize进行下采样： 将图像pyr1[i-1]的宽和高各缩放0.5倍得到图像img1_pyr
+            cv::resize(pyr1[i - 1], img1_pyr,
+                       cv::Size(pyr1[i - 1].cols * pyramid_scale, pyr1[i - 1].rows * pyramid_scale));
+            cv::resize(pyr2[i - 1], img2_pyr,
+                       cv::Size(pyr2[i - 1].cols * pyramid_scale, pyr2[i - 1].rows * pyramid_scale));
+            pyr1.push_back(img1_pyr);
+            pyr2.push_back(img2_pyr);
+        }
+    }
+    chrono::steady_clock::time_point t2 = chrono::steady_clock::now();          // 计时结束
+    auto time_used = chrono::duration_cast<chrono::duration<double>>(t2 - t1);  // 计算耗时
+    cout << "build pyramid time: " << time_used.count() << endl;                // 输出构建图像金字塔的耗时
+    
+    // *2. 初始化图像金字塔最顶层特征点的坐标
+    vector<KeyPoint> kp1_pyr, kp2_pyr;
+    for (auto &kp:kp1) 
+    {   // 这里意思大概是视觉slam十四讲p215的把上一层的追踪结果作为下一层光流的初始值
+        auto kp_top = kp;                   // 读取第一张图的特征点
+        kp_top.pt *= scales[pyramids - 1];  // 对这些特征点的坐标进行缩放，得到金字塔最顶层时的特征点坐标
+        kp1_pyr.push_back(kp_top);          // 最顶层图像1的角点坐标
+        kp2_pyr.push_back(kp_top);          // 最顶层图像2的角点坐标：用图像1的初始化图像2的
+    }
+
+    // *3. coarse-to-fine LK tracking in pyramids 由粗至精的光流跟踪（最顶层->最底层）
+    for (int level = pyramids - 1; level >= 0; level--)
+    {
+
+        success.clear();
+        t1 = chrono::steady_clock::now(); // 开始计时
+        OpticalFlowSingleLevel(pyr1[level], pyr2[level], kp1_pyr, kp2_pyr, success, inverse, true); // 对每一层进行和单层光流一样的光流计算
+        t2 = chrono::steady_clock::now(); // 计时结束
+        auto time_used = chrono::duration_cast<chrono::duration<double>>(t2 - t1);      // 计算耗时
+        cout << "track pyr " << level << " cost time: " << time_used.count() << endl;   // 输出光流跟踪耗时
+        if (level > 0) 
+        {   
+            // 放大特征点的坐标，为下一层作准备
+            for (auto &kp: kp1_pyr)
+                kp.pt /= pyramid_scale;//pyramidScale等于0.5，相当于乘了2
+            for (auto &kp: kp2_pyr)
+                kp.pt /= pyramid_scale;//pyramidScale等于0.5，相当于乘了2
+        }
+    }
+    for (auto &kp: kp2_pyr)
+        kp2.push_back(kp);  // 将光流计算出得到的第二张图片中的特征点存到kp2
+}
+
+int main(int argc, char **argv) {
+ 
+    // 读取图片：cv::Mat是一个多维矩阵类，用于表示像素值、图像数据和其他多维数据
+    Mat img1 = imread(file_1, 0);//0表示返回灰度图
+    Mat img2 = imread(file_2, 0);//0表示返回灰度图
+    
+    // *1. 在第一张图像中提取角点
+    // key points, using GFTT here.
+    vector<KeyPoint> kp1;
+    // 使用Good Features to Track（GFTT）角点检测器，三个参数为：
+    // maxCorners最大角点数目。在此处为500。
+    // qualityLevel角点可以接受的最小特征值，一般0.1或者0.01，不超过1。在此处为0.01。
+    // minDistance角点之间的最小距离。在此处为20。
+    Ptr<GFTTDetector> detector = GFTTDetector::create(500, 0.01, 20); // maximum 500 keypoints
+    detector->detect(img1, kp1);    // 将关键点保存在向量'kp1'中
+    
+    // *2. 用光流法追踪他们在第二张图像中的位置
+
+    /* 
+        *2.1 单层光流: 将光流看成一个优化问题：通过最小化灰度误差估计最优的像素偏移
+            缺点：
+                要把光流写成优化问题，就必须假设优化的初始值靠近最优值，才能保证算法的收敛。
+                如果相机运动较快，两张图像差异较明显，那么单层光流法容易达到一个局部最小值。
+    */ 
+    vector<KeyPoint> kp2_single;    // 存储第一张图中特征点在第二张图中的对应像素点
+    vector<bool> success_single;
+    OpticalFlowSingleLevel(img1, img2, kp1, kp2_single, success_single);
+    
+    /*
+        *2.2 多层光流: 通过图像金字塔来解决单层光流无法应对两张图差异较大时的问题。
+            图像金字塔：
+                原始图像为底，每往上一层就下采样得到相对粗糙的图像。
+            计算光流：
+                先从顶层开始计算，然后将上一层的追踪结果作为下一层光流的初始值。
+            可以解决单层光流缺点的原因：
+                当原始图像像素运动较大时，在顶层的图像看来，运动仍然在一个很小的范围内。
+    */ 
+    vector<KeyPoint> kp2_multi;
+    vector<bool> success_multi;
+    chrono::steady_clock::time_point t1 = chrono::steady_clock::now();          // 开始计时
+    OpticalFlowMultiLevel(img1, img2, kp1, kp2_multi, success_multi, true);     // 调用opencv的OpticalFlowMultiLevel函数
+    chrono::steady_clock::time_point t2 = chrono::steady_clock::now();          // 计时结束
+    auto time_used = chrono::duration_cast<chrono::duration<double>>(t2 - t1);  // 计算耗时
+    cout << "optical flow by gauss-newton: " << time_used.count() << endl;      // 输出使用高斯牛顿法计算光流使用时间
+    
+    /*
+        *2.3 opencv自带的计算光流函数
+    */
+    // use opencv's flow for validation
+    vector<Point2f> pt1, pt2;
+    for (auto &kp: kp1) pt1.push_back(kp.pt);   // 提供第一张图的特征点
+    vector<uchar> status;                       // status中元素表示对应角点是否被正确跟踪到，1为正确跟踪，0为错误跟踪
+    vector<float> error;                        // error表示误差
+    t1 = chrono::steady_clock::now();           // 开始计时
+    cv::calcOpticalFlowPyrLK(img1, img2, pt1, pt2, status, error);          // 调用opencv  calcOpticalFlowPyrLK函数来求解min = || I1(x,y) - I2(x + δx, y + δy) ||2 视觉slam十四讲p214式8.10
+    t2 = chrono::steady_clock::now();           // 计时结束
+    time_used = chrono::duration_cast<chrono::duration<double>>(t2 - t1);   // 计算耗时
+    cout << "optical flow by opencv: " << time_used.count() << endl;        // 输出使用opencv函数计算光流的耗时
+    
+    // *3. 绘制三种计算光流函数的效果
+    // 单层光流法
+    Mat img2_single;
+    cv::cvtColor(img2, img2_single, COLOR_GRAY2BGR);//将灰度图img2转换成BGR彩色图img2_single，彩色图中BGR各颜色通道值为原先灰度值
+    for (int i = 0; i < kp2_single.size(); i++) {
+        if (success_single[i]) {
+            cv::circle(img2_single, kp2_single[i].pt, 2, cv::Scalar(0, 250, 0), 2);     // 在img2_single图的特征点处画圈
+            cv::line(img2_single, kp1[i].pt, kp2_single[i].pt, cv::Scalar(0, 250, 0));  // 在img2_single图中，从第一张图的特征点到第二张图的特征点之间画线
+        }
+    }
+    
+    // 多层光流法
+    Mat img2_multi;
+    cv::cvtColor(img2, img2_multi, COLOR_GRAY2BGR);
+    for (int i = 0; i < kp2_multi.size(); i++) {
+        if (success_multi[i]) {
+            cv::circle(img2_multi, kp2_multi[i].pt, 2, cv::Scalar(0, 250, 0), 2);
+            cv::line(img2_multi, kp1[i].pt, kp2_multi[i].pt, cv::Scalar(0, 250, 0));
+        }
+    }
+    
+    // opencv自带的方法
+    Mat img2_CV;
+    cv::cvtColor(img2, img2_CV, COLOR_GRAY2BGR);
+    for (int i = 0; i < pt2.size(); i++) {
+        if (status[i]) {
+            cv::circle(img2_CV, pt2[i], 2, cv::Scalar(0, 250, 0), 2);
+            cv::line(img2_CV, pt1[i], pt2[i], cv::Scalar(0, 250, 0));
+        }
+    }
+    
+     //画出角点连线图
+    Mat imgMatches(img1.rows, img1.cols * 2, CV_8UC1);  //定义*行*列的Mat型变量
+    Rect rect1 = Rect(0, 0, img1.cols, img1.rows);
+    //Rect()有四个参数，第1个参数表示初始列，第2个参数表示初始行，
+    //第3个参数表示在初始列的基础上还要加上多少列（即矩形区域的宽度），第4个参数表示在初始行的基础上还要加上多少行（即矩形区域的高度）
+    Rect rect2 = Rect(img1.cols, 0, img2.cols, img2.rows);
+    img1.copyTo(imgMatches(rect1));
+    img2.copyTo(imgMatches(rect2));
+    cv::imshow("tracked single level", img2_single);
+    cv::imshow("tracked multi level", img2_multi);
+    cv::imshow("tracked by opencv", img2_CV);
+    
+    cv::waitKey(0);
+    return 0;
+}
+```
+
 ### 3.2 编译
+
+```cmake
+cmake_minimum_required(VERSION 3.0)
+project(ch8)
+ 
+set(CMAKE_BUILD_TYPE "Release")
+add_definitions("-DENABLE_SSE")
+set(CMAKE_CXX_FLAGS "-std=c++14 ${SSE_FLAGS} -g -O3 -march=native")
+list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
+list( APPEND CMAKE_MODULE_PATH /home/yang/3rdLibrary/g2o-20230223_git/cmake_modules/)
+find_package(OpenCV 4 REQUIRED)
+find_package(G2O REQUIRED)
+find_package(Sophus REQUIRED)
+find_package(Pangolin REQUIRED)
+find_package(FMT REQUIRED)
+ 
+include_directories(
+        ${OpenCV_INCLUDE_DIRS}
+        ${G2O_INCLUDE_DIRS}
+        ${Sophus_INCLUDE_DIRS}
+        "/usr/include/eigen3/"
+        ${Pangolin_INCLUDE_DIRS}
+)
+ 
+add_executable(optical_flow optical_flow.cpp)
+target_link_libraries(optical_flow ${OpenCV_LIBS} fmt::fmt)
+ 
+ 
+add_executable(direct_method direct_method.cpp)
+target_link_libraries(direct_method ${OpenCV_LIBS} ${Pangolin_LIBRARIES} fmt::fmt)
+```
+
+## 4. 直接法
 
 # 九、后端优化：BA图优化
 
