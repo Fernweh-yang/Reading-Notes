@@ -5187,6 +5187,89 @@ target_link_libraries(direct_method ${OpenCV_LIBS} ${Pangolin_LIBRARIES} fmt::fm
 
 ## 4. 直接法
 
+![image-20231025211209039](/home/yang/.config/Typora/typora-user-images/image-20231025211209039.png)
+
+<center style="color:#C125C0C0">图2: 直接法示意图</center>
+
+- **特征点法**：通过匹配描述子来知道p1对应的点p2在哪，然后根据**重投影误差**来优化位姿。
+
+- **直接法的思路**：初始化一个不准确的位姿R,t，计算第一帧中像素坐标p1在第二帧中对应的像素坐标p2
+
+  - 位姿R,t不准确时，显然p2和p1的光度会有很大的差别，因此我们基于光度的**灰度不变假设**通过**光度误差**来优化这个位姿
+    $$
+    e=\mathbf{I}_1(\mathbf{p_1})-\mathbf{I}_2(\mathbf{p}_2)\tag{1}
+    $$
+
+  - 位姿估计问题变为：
+    $$
+    \mathop{min}_T\ J(T)=\sum_{i=1}^Ne_i^Te_i,\ \ \ e_i=\mathbf{I}_1(\mathbf{p}_{1,i})-\mathbf{I}_2(\mathbf{p}_{2,i}) \tag{2}
+    $$
+
+    - N：N个空间点P
+    - T：位姿，我们要优化的变量。
+
+### 4.1 公式推导
+
+1. 要求解式2这个最小二乘问题，显然要求误差函数$e^Te$对于待优化变量的位姿T的导数
+
+   观察误差项$e=\mathbf{I}_1(\mathbf{p_1})-\mathbf{I}_2(\mathbf{p}_2)\tag{1}$可知：
+
+   - $\mathbf{I}_1$是第一帧的光度误差，这是我们已知的
+   - 所以只需关心$\mathbf{I}_2$对位姿T的导数
+
+2. 再看$\mathbf{I}_2$和什么有关
+
+   - 和空间点在第二帧的像素坐标$p_2$有关
+     $$
+     \mathbf{u}=p_2=\left [\begin{array}{cccc}
+     u \\
+     v\\
+     1 \\
+     \end{array}\right]=\frac{1}{Z_2}\mathbf{K}(\underbrace{\mathbf{RP}+\mathbf{t}}_{\mathbf{q}})=\frac{1}{Z_2}\mathbf{K}(exp(\xi^{\wedge})\mathbf{P})_{1:3}\tag{3}
+     $$
+
+     - $\mathbf{q}$：空间点P在第二个相机坐标系下的坐标
+     - $\mathbf{u}$：空间点P在第二帧图像中的像素坐标
+
+   - 因此误差项变为：
+     $$
+     e=\mathbf{I}_1(\mathbf{p_1})-\mathbf{I}_2(\mathbf{u})\tag{4}
+     $$
+
+3. 结合3式4式，链式求导得到误差e和相机位姿T之间的导数关系
+   $$
+   \begin{align}
+   J=\frac{\partial{e}}{\partial{\mathbf{T}}}&=-\frac{\partial{\mathbf{I}_2}}{\partial{\mathbf{T}}} \\
+   &=-\frac{\partial{\mathbf{I}_2}}{\partial{\mathbf{u}}} \frac{\partial{\mathbf{u}}}{\partial{\mathbf{q}}}\frac{\partial{\mathbf{q}}}{\partial{\mathbf{\delta\xi}}}
+   \end{align} \tag{5}
+   $$
+
+   - $\frac{\partial{\mathbf{I}_2}}{\partial{\mathbf{u}}}$：为u处的像素梯度
+
+   - $\frac{\partial{\mathbf{u}}}{\partial{\mathbf{q}}}$：为**投影方程**关于**相机象素坐标系下三维点**的导数
+     $$
+     \frac{\partial\mathbf{u}}{\partial\mathbf{q}}=\left [\begin{array}{cccc}
+     \frac{\partial{u}}{\partial{X}} & \frac{\partial{u}}{\partial{Y}} & \frac{\partial{u}}{\partial{Z}} \\
+     \frac{\partial{v}}{\partial{X}} & \frac{\partial{v}}{\partial{Y}} & \frac{\partial{v}}{\partial{Z}} \\
+     \end{array}\right]=\left [\begin{array}{cccc}
+     \frac{f_x}{Z} & 0& -\frac{f_xX}{Z^2} \\
+     0 & \frac{f_y}{Z} & -\frac{f_yY}{Z^2} \\
+     \end{array}\right] \tag{6}
+     $$
+     
+
+   - $\frac{\partial{\mathbf{q}}}{\partial{\mathbf{\delta\xi}}}$：为变换后的三维点对变换的导数
+
+     根据李代数一章可知：
+     $$
+     \frac{\partial{\mathbf{q}}}{\partial{\mathbf{\delta\xi}}}=[\mathbf{I},-\mathbf{q}^{\wedge}] \tag{7}
+     $$
+
+4. 通常6,7式合并为一起，于是得到我们的雅可比矩阵
+   $$
+   J=-\frac{\partial{\mathbf{I}_2}}{\partial{\mathbf{u}}} \frac{\partial{\mathbf{u}}}{\partial{\mathbf{\delta\xi}}}\tag{8}
+   $$
+   得到雅可比矩阵后，就可以用高斯牛顿或L-M方法计算增量方程
 # 九、后端优化：BA图优化
 
 前端里程计能给出一个短时间内的轨迹和地图，但由于不可避免的误差累积，这个地图在长时间内是不准确的。
