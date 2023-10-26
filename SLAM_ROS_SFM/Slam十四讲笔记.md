@@ -4708,6 +4708,46 @@ private:
     bool has_initial = false;
 };
 
+/**
+ * ! 双线性插值求灰度值get a gray scale value from reference image (bi-linear interpolated)
+ * @brief 为什么用双线性插值求灰度值？ 因为迭代dx,dy时，他们通常不是整数的。所以求(x+dx,y+dy)附近4个整数坐标的像素点
+ * @param img
+ * @param x
+ * @param y
+ * @return the interpolated value of this pixel
+ * inline表示内联函数，它是为了解决一些频繁调用的小函数大量消耗栈空间的问题而引入的.
+ 注意要写在calculateOpticalFlow()函数之前
+ */
+inline float GetPixelValue(const cv::Mat &img, float x, float y)
+{
+    // boundary check(边界检验)
+    if (x < 0) x = 0;
+    if (y < 0) y = 0;
+    if (x >= img.cols) x = img.cols - 1;    // x: 列坐标
+    if (y >= img.rows) y = img.rows - 1;    // y: 行坐标
+
+    // img.step是一个整数值，表示从图像或矩阵的一行的开头到下一行的开头之间的字节间隔
+    // img.data 是 cv::Mat 的数据指针，指向图像数据的起始地址。可以看作将图片像素展开为了一行
+    uchar *data = &img.data[int(y) * img.step + int(x)];   // 获取某一像素的内存地址
+    float xx = x - floor(x);                // floor向下取整，比如floor(3.7)=3.0， xx = 0.7
+    float yy = y - floor(y);
+
+    /* 
+    想要求得w点的灰度值,abcd为4个距离w最近的像素点
+    b                   c
+       
+        w
+    
+    a                   d
+    */
+    return float(
+        (1 - xx) * (1 - yy) * data[0] +     // data[0] : a点
+        xx * (1 - yy) * data[1] +           // data[1] : d点
+        (1 - xx) * yy * data[img.step] +    // data[img.step：b点
+        xx * yy * data[img.step + 1]        // data[img.step+1]：c点
+    );
+}
+
 // ! 使用高斯牛顿法求解图像2中相应的角点坐标
 void OpticalFlowTracker::calculateOpticalFlow(const Range &range) {
     // parameters
@@ -4888,45 +4928,6 @@ void OpticalFlowMultiLevel(
     vector<bool> &success,
     bool inverse = false
 );
-
-/**
- * ! 双线性插值求灰度值get a gray scale value from reference image (bi-linear interpolated)
- * @brief 为什么用双线性插值求灰度值？ 因为迭代dx,dy时，他们通常不是整数的。所以求(x+dx,y+dy)附近4个整数坐标的像素点
- * @param img
- * @param x
- * @param y
- * @return the interpolated value of this pixel
- * inline表示内联函数，它是为了解决一些频繁调用的小函数大量消耗栈空间的问题而引入的
- */
-inline float GetPixelValue(const cv::Mat &img, float x, float y)
-{
-    // boundary check(边界检验)
-    if (x < 0) x = 0;
-    if (y < 0) y = 0;
-    if (x >= img.cols) x = img.cols - 1;    // x: 列坐标
-    if (y >= img.rows) y = img.rows - 1;    // y: 行坐标
-
-    // img.step是一个整数值，表示从图像或矩阵的一行的开头到下一行的开头之间的字节间隔
-    // img.data 是 cv::Mat 的数据指针，指向图像数据的起始地址。可以看作将图片像素展开为了一行
-    uchar *data = &img.data[int(y) * img.step + int(x)];   // 获取某一像素的内存地址
-    float xx = x - floor(x);                // floor向下取整，比如floor(3.7)=3.0， xx = 0.7
-    float yy = y - floor(y);
-
-    /* 
-    想要求得w点的灰度值,abcd为4个距离w最近的像素点
-    b                   c
-       
-        w
-    
-    a                   d
-    */
-    return float(
-        (1 - xx) * (1 - yy) * data[0] +     // data[0] : a点
-        xx * (1 - yy) * data[1] +           // data[1] : d点
-        (1 - xx) * yy * data[img.step] +    // data[img.step：b点
-        xx * yy * data[img.step + 1]        // data[img.step+1]：c点
-    );
-}
  
 /**
  * ! 单层光流法
@@ -5207,6 +5208,24 @@ target_link_libraries(direct_method ${OpenCV_LIBS} ${Pangolin_LIBRARIES} fmt::fm
 
     - N：N个空间点P
     - T：位姿，我们要优化的变量。
+  
+- **直接法分类**
+
+  空间点P在直接法中是已知的，它的来源可以是：1. RGB-D相机中可以把任意像素反投影到三维空间。2. 双目相机中可以根据视察来计算像素的深度。3. 单目相机中需要考虑由P带来的深度不确定性。
+
+  根据的P的来源，可以把直接法分类为：
+
+  1. 稀疏直接法：P点来自稀疏关键点。
+
+     使用数百上千个关键点，并像L-K光流一样假设它周围的像素不变。
+
+  2. 半稠密(semi-dense)直接法：P来自部分梯度明显的像素
+
+     在下面的式8中，如果像素梯度$\frac{\partial{\mathbf{I}_2}}{\partial{\mathbf{u}}}=0$，那么整个雅可比矩阵都是0，对计算增量没有帮助。因此可以舍弃像素梯度不明显的地方。
+
+  3. 稠密直接法：P来自所有像素
+
+     需要计算所有的像素，因此需要GPU加速。但是，像素梯度不明显的点对运动估计没什么贡献，在重构时也难以估计位置。
 
 ### 4.1 公式推导
 
@@ -5257,19 +5276,432 @@ target_link_libraries(direct_method ${OpenCV_LIBS} ${Pangolin_LIBRARIES} fmt::fm
      \end{array}\right] \tag{6}
      $$
      
-
    - $\frac{\partial{\mathbf{q}}}{\partial{\mathbf{\delta\xi}}}$：为变换后的三维点对变换的导数
-
+   
      根据李代数一章可知：
      $$
      \frac{\partial{\mathbf{q}}}{\partial{\mathbf{\delta\xi}}}=[\mathbf{I},-\mathbf{q}^{\wedge}] \tag{7}
      $$
-
+   
 4. 通常6,7式合并为一起，于是得到我们的雅可比矩阵
    $$
    J=-\frac{\partial{\mathbf{I}_2}}{\partial{\mathbf{u}}} \frac{\partial{\mathbf{u}}}{\partial{\mathbf{\delta\xi}}}\tag{8}
    $$
    得到雅可比矩阵后，就可以用高斯牛顿或L-M方法计算增量方程
+
+## 5. 实践：直接法
+
+### 5.1 代码
+
+```c++
+#include <opencv2/opencv.hpp>
+#include <sophus/se3.hpp>
+#include <boost/format.hpp>
+#include <pangolin/pangolin.h>
+ 
+using namespace std;
+ 
+typedef vector<Eigen::Vector2d, Eigen::aligned_allocator<Eigen::Vector2d>> VecVector2d;
+// Camera intrinsics 相机内参
+double fx = 718.856, fy = 718.856, cx = 607.1928, cy = 185.2157;
+// baseline   双目相机基线
+double baseline = 0.573;
+// paths 图像路径
+string left_file = "../left.png";
+string disparity_file = "../disparity.png";
+boost::format fmt_others("../%06d.png");    // %06d确保输出的宽度为6个字符
+ 
+// useful typedefs
+typedef Eigen::Matrix<double, 6, 6> Matrix6d;
+typedef Eigen::Matrix<double, 2, 6> Matrix26d;
+typedef Eigen::Matrix<double, 6, 1> Vector6d;
+
+// ! class for accumulator jacobians in parallel  用于并行计算雅可比矩阵的类
+class JacobianAccumulator {
+public:
+    //类的构造函数，使用列表进行初始化
+    JacobianAccumulator(
+        const cv::Mat &img1_,
+        const cv::Mat &img2_,
+        const VecVector2d &px_ref_,//角点坐标
+        const vector<double> depth_ref_,//路标点的Z坐标值
+        Sophus::SE3d &T21_) :
+        img1(img1_), img2(img2_), px_ref(px_ref_), depth_ref(depth_ref_), T21(T21_) {
+        projection = VecVector2d(px_ref.size(), Eigen::Vector2d(0, 0));
+    }
+ 
+    /// accumulate jacobians in a range 在range范围内加速计算雅可比矩阵
+    void accumulate_jacobian(const cv::Range &range);
+ 
+    /// get hessian matrix 获取海塞矩阵
+    Matrix6d hessian() const { return H; }
+ 
+    /// get bias 获取矩阵b
+    Vector6d bias() const { return b; }
+ 
+    /// get total cost  获取总共的代价
+    double cost_func() const { return cost; }
+ 
+    /// get projected points 获取图像2中的角点坐标
+    VecVector2d projected_points() const { return projection; }
+ 
+    /// reset h, b, cost to zero  将海塞矩阵H，矩阵b和代价cost置为0
+    void reset() {
+        H = Matrix6d::Zero();
+        b = Vector6d::Zero();
+        cost = 0;
+    }
+ 
+private:
+    const cv::Mat &img1;
+    const cv::Mat &img2;
+    const VecVector2d &px_ref;      // 图像1中角点坐标
+    const vector<double> depth_ref; // 图像1中路标点的Z坐标值
+    Sophus::SE3d &T21;
+    VecVector2d projection;         // projected points
+ 
+    std::mutex hessian_mutex;
+    Matrix6d H = Matrix6d::Zero();
+    Vector6d b = Vector6d::Zero();
+    double cost = 0;
+};
+
+
+/**
+ * ! 多层直接法定义pose estimation using direct method
+ * @param img1
+ * @param img2
+ * @param px_ref
+ * @param depth_ref
+ * @param T21
+ */
+void DirectPoseEstimationMultiLayer(
+    const cv::Mat &img1,
+    const cv::Mat &img2,
+    const VecVector2d &px_ref,
+    const vector<double> depth_ref,
+    Sophus::SE3d &T21
+);
+
+
+/**
+ * ! 单层直接法定义pose estimation using direct method
+ * @param img1
+ * @param img2
+ * @param px_ref
+ * @param depth_ref
+ * @param T21
+ */
+void DirectPoseEstimationSingleLayer(
+    const cv::Mat &img1,
+    const cv::Mat &img2,
+    const VecVector2d &px_ref,
+    const vector<double> depth_ref,
+    Sophus::SE3d &T21
+);
+
+
+// ! bilinear interpolation 双线性插值求灰度值
+inline float GetPixelValue(const cv::Mat &img, float x, float y) //inline表示内联函数，它是为了解决一些频繁调用的小函数大量消耗栈空间的问题而引入的
+{
+    // boundary check
+    if (x < 0) x = 0;
+    if (y < 0) y = 0;
+    if (x >= img.cols) x = img.cols - 1;
+    if (y >= img.rows) y = img.rows - 1;
+    //...|I1      I2|...
+    //...|          |...
+    //...|          |...
+    //...|I3      I4|...
+    uchar *data = &img.data[int(y) * img.step + int(x)];//x和y是整数 
+    //data[0] -> I1  data[1] -> I2  data[img.step] -> I3  data[img.step + 1] -> I4
+    float xx = x - floor(x);//xx算出的是x的小数部分
+    float yy = y - floor(y);//yy算出的是y的小数部分
+    return float//最终的像素灰度值
+    (
+        (1 - xx) * (1 - yy) * data[0] +
+        xx * (1 - yy) * data[1] +
+        (1 - xx) * yy * data[img.step] +
+        xx * yy * data[img.step + 1]
+    );
+}
+
+// ! 雅克比矩阵计算
+void JacobianAccumulator::accumulate_jacobian(const cv::Range &range) {
+    // parameters
+    const int half_patch_size = 1;  // 设置窗口尺寸为3*3： -1,0,1
+    int cnt_good = 0;
+    Matrix6d hessian = Matrix6d::Zero();
+    Vector6d bias = Vector6d::Zero();
+    double cost_tmp = 0;
+
+    for (size_t i = range.start; i < range.end; i++) {
+        // * 1.compute the projection in the second image 
+        // point_ref表示图像1中选取的像素点
+        Eigen::Vector3d point_ref =
+            depth_ref[i] * Eigen::Vector3d((px_ref[i][0] - cx) / fx, (px_ref[i][1] - cy) / fy, 1);
+        // point_cur为像素点在第二帧相机坐标系下的坐标（T21是估计的
+        Eigen::Vector3d point_cur = T21 * point_ref;
+        // 若深度值为负，说明是异常点，跳过
+        if (point_cur[2] < 0)   
+            continue;
+        // 求得在当前估计的T下，各个像素点在图2像素坐标。十四讲p99式5.5 
+        float u = fx * point_cur[0] / point_cur[2] + cx, v = fy * point_cur[1] / point_cur[2] + cy;
+        // 如果像素坐标在边缘，无法构成窗口计算雅克比矩阵，则跳过
+        if (u < half_patch_size || u > img2.cols - half_patch_size || v < half_patch_size ||
+            v > img2.rows - half_patch_size)
+            continue;
+        // 将有效投影点存入容器，作为直接法的初值
+        projection[i] = Eigen::Vector2d(u, v);
+        // 取出各个像素点在第二帧相机坐标系下的坐标，提前计算需要的中间值
+        double X = point_cur[0], Y = point_cur[1], Z = point_cur[2],
+            Z2 = Z * Z, Z_inv = 1.0 / Z, Z2_inv = Z_inv * Z_inv;// Z2_inv = (1 / (Z * Z))
+        // 有效点计数
+        cnt_good++;
+        
+        // *2. and compute error and jacobian   计算海塞矩阵H，矩阵b和代价cost -> 得到误差和雅可比矩阵
+        // 分别计算3*3窗口内各点误差, -1,0,1
+        for (int x = -half_patch_size; x <= half_patch_size; x++)
+            for (int y = -half_patch_size; y <= half_patch_size; y++) {
+                //ei = I1(p1,i) - I(p2,i)其中p1，p2空间点P在两个时刻的像素位置坐标，十四讲p219式8.13
+                double error = GetPixelValue(img1, px_ref[i][0] + x, px_ref[i][1] + y) -
+                               GetPixelValue(img2, u + x, v + y);
+                Matrix26d J_pixel_xi;           // 像素梯度
+                Eigen::Vector2d J_img_pixel;    // 灰度梯度
+                // ** 根据十四讲p220式8.18计算雅可比矩阵的第二部分
+                J_pixel_xi(0, 0) = fx * Z_inv;
+                J_pixel_xi(0, 1) = 0;
+                J_pixel_xi(0, 2) = -fx * X * Z2_inv;
+                J_pixel_xi(0, 3) = -fx * X * Y * Z2_inv;
+                J_pixel_xi(0, 4) = fx + fx * X * X * Z2_inv;
+                J_pixel_xi(0, 5) = -fx * Y * Z_inv;
+                J_pixel_xi(1, 0) = 0;
+                J_pixel_xi(1, 1) = fy * Z_inv;
+                J_pixel_xi(1, 2) = -fy * Y * Z2_inv;
+                J_pixel_xi(1, 3) = -fy - fy * Y * Y * Z2_inv;
+                J_pixel_xi(1, 4) = fy * X * Y * Z2_inv;
+                J_pixel_xi(1, 5) = fy * X * Z_inv;
+                // ** 计算雅可比矩阵的第一部分：像素梯度
+                /*
+                    dx,dy是优化变量 即（Δu，Δv） 计算像素梯度
+                    相当于 J = - [ {I1( u + i + 1,v + j )-I1(u + i - 1,v + j )}/2,I1( u + i,v + j + 1)-I1( u + i ,v + j - 1)}/2]T T表示转置
+                    I1 -> 图像1的灰度信息
+                    i -> x
+                    j -> y
+                */
+                J_img_pixel = Eigen::Vector2d(
+                    0.5 * (GetPixelValue(img2, u + 1 + x, v + y) - GetPixelValue(img2, u - 1 + x, v + y)),
+                    0.5 * (GetPixelValue(img2, u + x, v + 1 + y) - GetPixelValue(img2, u + x, v - 1 + y))
+                );
+                
+                // ** 根据十四讲p220式8.19将两部分合并起来
+                Vector6d J = -1.0 * (J_img_pixel.transpose() * J_pixel_xi).transpose();
+                hessian += J * J.transpose();
+                bias += -error * J;
+                cost_tmp += error * error;
+            }
+    }
+    // 如果存在有效点，将结果保存到class中
+    if (cnt_good) {
+        // set hessian, bias and cost
+        unique_lock<mutex> lck(hessian_mutex);
+        H += hessian;               // H = Jij Jij(T)(累加和)
+        b += bias;                  // b = -Jij * eij(累加和)
+        cost += cost_tmp / cnt_good;// cost = || eij ||2 2范数
+    }
+}
+
+
+// ! 单层直接法实现
+void DirectPoseEstimationSingleLayer(
+        const cv::Mat &img1,
+        const cv::Mat &img2,
+        const VecVector2d &px_ref,          // 第1张图中随机选取的像素坐标
+        const vector<double> depth_ref,     // 第1张图中随机选取的像素坐标的深度值
+        Sophus::SE3d &T21){                 // 要优化求解的位姿
+    
+    const int iterations = 10;              // 设置迭代次数为10
+    double cost = 0, lastCost = 0;          // 将代价和最终代价初始化为0W
+    
+    auto t1 = chrono::steady_clock::now();  // 开始计时
+    JacobianAccumulator jaco_accu(img1, img2, px_ref, depth_ref, T21);  // 用于计算雅可比矩阵的类
+    
+    for (int iter = 0; iter < iterations; iter++) {
+        jaco_accu.reset();  // 重置雅可比矩阵
+
+        // 并行计算雅可比矩阵，得到海塞矩阵H，矩阵b和代价cost
+        cv::parallel_for_(cv::Range(0, px_ref.size()),
+                          std::bind(&JacobianAccumulator::accumulate_jacobian, &jaco_accu, std::placeholders::_1));
+        Matrix6d H = jaco_accu.hessian();   // 计算海塞矩阵
+        Vector6d b = jaco_accu.bias();      // 计算b矩阵
+
+        Vector6d update = H.ldlt().solve(b);;   // 增量方程的求解结果是李代数，不过是向量形式的
+        T21 = Sophus::SE3d::exp(update) * T21;  // 更新待优化变量，左扰动，因此将增量的变换矩阵左乘迭代
+        cost = jaco_accu.cost_func();
+        if (std::isnan(update[0])) //解出来的更新量不是一个数字，退出迭代
+        {
+            // sometimes occurred when we have a black or white patch and H is irreversible
+            cout << "update is nan" << endl;
+            break;
+        }
+        if (iter > 0 && cost > lastCost) //代价不再减小，退出迭代 
+        {
+            cout << "cost increased: " << cost << ", " << lastCost << endl;
+            break;
+        }
+        if (update.norm() < 1e-3) //更新量的模小于1e-3，退出迭代
+        {
+            // converge
+            break;
+        }
+        lastCost = cost;
+        cout << "iteration: " << iter << ", cost: " << cost << endl;
+    }//GN(高斯牛顿法)迭代结束
+
+    cout << "T21 = \n" << T21.matrix() << endl;                                 // 输出T21矩阵
+    auto t2 = chrono::steady_clock::now();                                      // 计时结束
+    auto time_used = chrono::duration_cast<chrono::duration<double>>(t2 - t1);  // 计算耗时
+    cout << "direct method for single layer: " << time_used.count() << endl;    // 输出使用单层直接法所用时间
+    
+    // plot the projected pixels here
+    cv::Mat img2_show;
+    cv::cvtColor(img2, img2_show, cv::COLOR_GRAY2BGR);
+    VecVector2d projection = jaco_accu.projected_points();
+    for (size_t i = 0; i < px_ref.size(); ++i) {
+        auto p_ref = px_ref[i];
+        auto p_cur = projection[i];
+        if (p_cur[0] > 0 && p_cur[1] > 0) {
+            cv::circle(img2_show, cv::Point2f(p_cur[0], p_cur[1]), 2, cv::Scalar(0, 250, 0), 2);
+            cv::line(img2_show, cv::Point2f(p_ref[0], p_ref[1]), cv::Point2f(p_cur[0], p_cur[1]),
+                     cv::Scalar(0, 250, 0));
+        }
+    }
+    cv::imshow("current", img2_show);
+    cv::waitKey();
+}
+
+// ! 多层直接法
+void DirectPoseEstimationMultiLayer(
+    const cv::Mat &img1,
+    const cv::Mat &img2,
+    const VecVector2d &px_ref,
+    const vector<double> depth_ref,
+    Sophus::SE3d &T21) {
+    // parameters
+    int pyramids = 4;//金字塔层数为4
+    double pyramid_scale = 0.5;//每层之间的缩放因子设为0.5
+    double scales[] = {1.0, 0.5, 0.25, 0.125};
+    // create pyramids 创建图像金字塔
+    vector<cv::Mat> pyr1, pyr2; // image pyramids pyr1 -> 图像1的金字塔 pyr2 -> 图像2的金字塔
+    for (int i = 0; i < pyramids; i++) {
+        if (i == 0) {
+            pyr1.push_back(img1);
+            pyr2.push_back(img2);
+        } else {
+            cv::Mat img1_pyr, img2_pyr;
+            //将图像pyr1[i-1]的宽和高各缩放0.5倍得到图像img1_pyr
+            cv::resize(pyr1[i - 1], img1_pyr,
+                       cv::Size(pyr1[i - 1].cols * pyramid_scale, pyr1[i - 1].rows * pyramid_scale));
+            //将图像pyr2[i-1]的宽和高各缩放0.5倍得到图像img2_pyr
+            cv::resize(pyr2[i - 1], img2_pyr,
+                       cv::Size(pyr2[i - 1].cols * pyramid_scale, pyr2[i - 1].rows * pyramid_scale));
+            pyr1.push_back(img1_pyr);
+            pyr2.push_back(img2_pyr);
+        }
+    }
+    double fxG = fx, fyG = fy, cxG = cx, cyG = cy;  // backup the old values 备份旧值
+    for (int level = pyramids - 1; level >= 0; level--) {
+        VecVector2d px_ref_pyr; // set the keypoints in this pyramid level  设置此金字塔级别中的关键点
+        for (auto &px: px_ref) {
+            px_ref_pyr.push_back(scales[level] * px);
+        }
+        // scale fx, fy, cx, cy in different pyramid levels  在不同的金字塔级别缩放 fx, fy, cx, cy
+        fx = fxG * scales[level];
+        fy = fyG * scales[level];
+        cx = cxG * scales[level];
+        cy = cyG * scales[level];
+        DirectPoseEstimationSingleLayer(pyr1[level], pyr2[level], px_ref_pyr, depth_ref, T21);
+    }
+}
+
+int main(int argc, char **argv) {
+ 
+    cv::Mat left_img = cv::imread(left_file, 0);            // 0表示返回灰度图，读取第一张图像left.png
+    cv::Mat disparity_img = cv::imread(disparity_file, 0);  // 0表示返回灰度图，disparity.png是left.png的视差图
+    
+    // * 在图像1中随机选择2000个像素点，计算他们对应的深度
+    // let's randomly pick pixels in the first image and generate some 3d points in the first image's frame
+    cv::RNG rng;
+    int nPoints = 2000;
+    int boarder = 20;
+    VecVector2d pixels_ref;     // 像素坐标
+    vector<double> depth_ref;   // 像素深度
+    // generate pixels in ref and load depth data
+    for (int i = 0; i < nPoints; i++) {
+        int x = rng.uniform(boarder, left_img.cols - boarder);  // don't pick pixels close to boarder 不要拾取靠近边界的像素 
+        int y = rng.uniform(boarder, left_img.rows - boarder);  // don't pick pixels close to boarder 不要拾取靠近边界的像素 
+        int disparity = disparity_img.at<uchar>(y, x);
+        double depth = fx * baseline / disparity; // you know this is disparity to depth
+        depth_ref.push_back(depth);
+        pixels_ref.push_back(Eigen::Vector2d(x, y));
+    }
+    
+    // * 利用直接法计算5张图的相机位姿
+    // estimates 01~05.png's pose using this information
+    Sophus::SE3d T_cur_ref;     // SE3d特殊欧几里德群，T_cur_ref表示当前帧（cur）相对于参考帧（ref）的位姿变换T。
+    for (int i = 1; i < 6; i++) // 1~5 i从1到5，共5张图
+    {  
+        // cout << fmt_others % i << endl;
+        cv::Mat img = cv::imread((fmt_others % i).str(), 0);//读取图片，0表示返回一张灰度图
+        // ** 单层直接法
+        // 计算图像img相对于left_img的位姿T_cur_ref，以图片left.png为基准
+        DirectPoseEstimationSingleLayer(left_img, img, pixels_ref, depth_ref, T_cur_ref);
+        // ** 多层直接法
+        // DirectPoseEstimationMultiLayer(left_img, img, pixels_ref, depth_ref, T_cur_ref);
+    }
+    return 0;
+}
+```
+
+
+
+### 5.2 编译
+
+同3.2
+
+```c++
+cmake_minimum_required(VERSION 3.0)
+project(ch8)
+ 
+set(CMAKE_BUILD_TYPE "Release")
+add_definitions("-DENABLE_SSE")
+set(CMAKE_CXX_FLAGS "-std=c++14 ${SSE_FLAGS} -g -O3 -march=native")
+list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
+list( APPEND CMAKE_MODULE_PATH /home/yang/3rdLibrary/g2o-20230223_git/cmake_modules/)
+find_package(OpenCV 4 REQUIRED)
+find_package(G2O REQUIRED)
+find_package(Sophus REQUIRED)
+find_package(Pangolin REQUIRED)
+find_package(FMT REQUIRED)
+ 
+include_directories(
+        ${OpenCV_INCLUDE_DIRS}
+        ${G2O_INCLUDE_DIRS}
+        ${Sophus_INCLUDE_DIRS}
+        "/usr/include/eigen3/"
+        ${Pangolin_INCLUDE_DIRS}
+)
+ 
+add_executable(optical_flow optical_flow.cpp)
+target_link_libraries(optical_flow ${OpenCV_LIBS} fmt::fmt)
+ 
+ 
+add_executable(direct_method direct_method.cpp)
+target_link_libraries(direct_method ${OpenCV_LIBS} ${Pangolin_LIBRARIES} fmt::fmt)
+```
+
+
+
 # 九、后端优化：BA图优化
 
 前端里程计能给出一个短时间内的轨迹和地图，但由于不可避免的误差累积，这个地图在长时间内是不准确的。
