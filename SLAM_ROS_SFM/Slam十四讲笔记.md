@@ -5226,6 +5226,33 @@ target_link_libraries(direct_method ${OpenCV_LIBS} ${Pangolin_LIBRARIES} fmt::fm
   3. 稠密直接法：P来自所有像素
 
      需要计算所有的像素，因此需要GPU加速。但是，像素梯度不明显的点对运动估计没什么贡献，在重构时也难以估计位置。
+  
+- 直接法的优缺点：
+
+  优点：
+
+  1. 省去计算特征点和描述子的时间
+  2. 因为只要求有像素梯度就可以，所以特征缺失的场合下也可以使用
+  3. 可以构建半稠密和稠密的地图，而特征点法只能是稀疏的。
+
+  缺点：
+
+  1. 非凸性：由于图像的非凸性，因此只有在相机运动很小的情况下，才能避免进入局部最小值。
+
+     图像金字塔可以一定程度的减小这个缺点
+
+  2. 单个像素没有区分度：和某一个像素的灰度值相近的像素太多了。
+
+     因此需要：
+
+     - 计算图像块(patch)
+     - 计算复杂的相关性，如归一化相关性(归一化相关性Normalized cross correlation,NCC)
+
+     并且由于每个像素的意见都是不一致的，因此一定要计算足够的像素点直接法才表现良好。通常需要500个点
+
+  3. 灰度值不变是很强的假设：1.如果相机是自动曝光的，那么图像会整体变暗变亮。2.关照变化
+
+     实用的直接法还需要估计相机的曝光参数，DSO-SLAM可以做到
 
 ### 4.1 公式推导
 
@@ -5287,7 +5314,37 @@ target_link_libraries(direct_method ${OpenCV_LIBS} ${Pangolin_LIBRARIES} fmt::fm
    $$
    J=-\frac{\partial{\mathbf{I}_2}}{\partial{\mathbf{u}}} \frac{\partial{\mathbf{u}}}{\partial{\mathbf{\delta\xi}}}\tag{8}
    $$
-   得到雅可比矩阵后，就可以用高斯牛顿或L-M方法计算增量方程
+
+得到所有像素点的雅可比矩阵后，就可以用高斯牛顿或L-M方法计算增量方程，最后得到旋转矩阵T的微小增量$exp(\delta \xi^{\wedge})$。
+
+### 4.2 迭代过程的理解
+
+直接法完全依靠优化来求解相机位姿。要得到正确的优化结果，就要**保证大部分像素梯度能够把优化引导到正确的方向**
+
+1. 先有第一帧，对于其中一个灰度值为229的像素，它的深度信息已知，作为第一张图相机内外参也已知，因此我们可以根据像素坐标->归一化坐标->相机坐标->世界坐标的步骤来推断出空间点P的位置。
+
+2. 然后得到新的一帧，初始化一个一、二帧之间的的位姿变换T，这个T就是我们要求的相机位姿需要不断优化，从而得到正确的相机位姿T
+
+3. 在这个初始的T下，由3式计算得到的第二帧像素坐标p2的灰度值为126
+
+4. 由4式得到误差值为：229-126=103。为了减小这个误差，我们希望**微调相机的位姿，使像素更亮一些**
+
+5. 那应该向哪里微调呢？这就需要局部的像素梯度即5式的第一部分$\frac{\partial{\mathbf{I}_2}}{\partial{\mathbf{u}}}$
+
+   比如：
+
+   - 沿着u轴(水平向右)走一个像素点，该处的灰度值为123，相比于126减小了3
+   - 沿着v轴(竖直向下)走一个像素点，该处的灰度值为108，相比于126减小了18
+
+   由此可知该处的梯度为[-3,-18]，因此为了提高亮度，需要向**左上方**移动。
+
+6. 知道了所有像素应该往哪里微调后，先根据8式计算出他们的雅可比矩阵J，然后得到他们总体的海瑟矩阵H偏差b，最后根据高斯牛顿法或者L-M就可以得到这一次位姿的微小增量$exp(\delta \xi^{\wedge})$
+
+7. 如此，得到了第一次迭代后的位姿$exp(\delta \xi^{\wedge})T$
+
+理想情况下，不断循环上面这7步就可以降低光度误差(4式)最后收敛了。但现实中图像是一个很强烈的**非凸函数**，沿着像素梯度前进很容易进入一个局部最小值。
+
+**因此，只有当相机运动很小，图像中的梯度没有很强的非凸性时，才能使用直接法。**
 
 ## 5. 实践：直接法
 
@@ -5581,45 +5638,50 @@ void DirectPoseEstimationSingleLayer(
 }
 
 // ! 多层直接法
+// 和多层光流法类似
 void DirectPoseEstimationMultiLayer(
     const cv::Mat &img1,
     const cv::Mat &img2,
-    const VecVector2d &px_ref,
-    const vector<double> depth_ref,
-    Sophus::SE3d &T21) {
+    const VecVector2d &px_ref,          // 第1张图中随机选取的像素坐标
+    const vector<double> depth_ref,     // 第1张图中随机选取的像素坐标的深度值
+    Sophus::SE3d &T21) {                // 要优化求解的位姿
     // parameters
-    int pyramids = 4;//金字塔层数为4
-    double pyramid_scale = 0.5;//每层之间的缩放因子设为0.5
+    int pyramids = 4;                   // 金字塔层数为4
+    double pyramid_scale = 0.5;         // 每层之间的缩放因子设为0.5
     double scales[] = {1.0, 0.5, 0.25, 0.125};
-    // create pyramids 创建图像金字塔
+    
+    // * create pyramids 创建图像金字塔
     vector<cv::Mat> pyr1, pyr2; // image pyramids pyr1 -> 图像1的金字塔 pyr2 -> 图像2的金字塔
     for (int i = 0; i < pyramids; i++) {
-        if (i == 0) {
+        if (i == 0) {   // 最底层是原始图像
             pyr1.push_back(img1);
             pyr2.push_back(img2);
         } else {
             cv::Mat img1_pyr, img2_pyr;
-            //将图像pyr1[i-1]的宽和高各缩放0.5倍得到图像img1_pyr
+            
+            //使用resize进行下采样： 将图像pyr1[i-1]的宽和高各缩放0.5倍得到图像img1_pyr
             cv::resize(pyr1[i - 1], img1_pyr,
                        cv::Size(pyr1[i - 1].cols * pyramid_scale, pyr1[i - 1].rows * pyramid_scale));
-            //将图像pyr2[i-1]的宽和高各缩放0.5倍得到图像img2_pyr
             cv::resize(pyr2[i - 1], img2_pyr,
                        cv::Size(pyr2[i - 1].cols * pyramid_scale, pyr2[i - 1].rows * pyramid_scale));
             pyr1.push_back(img1_pyr);
             pyr2.push_back(img2_pyr);
         }
     }
+    // * 更新每一层的相机内参，并对每一层图像实施单层直接法
     double fxG = fx, fyG = fy, cxG = cx, cyG = cy;  // backup the old values 备份旧值
     for (int level = pyramids - 1; level >= 0; level--) {
-        VecVector2d px_ref_pyr; // set the keypoints in this pyramid level  设置此金字塔级别中的关键点
+        // ** 将从第一张图中随机选取的像素坐标，同样缩放到图像金字塔对应的尺度
+        VecVector2d px_ref_pyr;      
         for (auto &px: px_ref) {
             px_ref_pyr.push_back(scales[level] * px);
         }
-        // scale fx, fy, cx, cy in different pyramid levels  在不同的金字塔级别缩放 fx, fy, cx, cy
+        // ** 相机内参同样需要缩放
         fx = fxG * scales[level];
         fy = fyG * scales[level];
         cx = cxG * scales[level];
         cy = cyG * scales[level];
+        // ** 调用单层直接法
         DirectPoseEstimationSingleLayer(pyr1[level], pyr2[level], px_ref_pyr, depth_ref, T21);
     }
 }
