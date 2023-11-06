@@ -1289,3 +1289,25 @@ Online Learning有点像自动控制系统，但又不尽相同，二者的区�
 
 1. Logistic regression trained using batch gradient descent. 
 2. Computing the average of all the features in your training set $\mu = \frac{1}{m} \sum_{i=1}^m x^{(i)}$
+
+
+
+# 分类和回归的区别及其在目标检测中的应用
+
+[参考](https://blog.csdn.net/qq_47233366/article/details/125790781)
+
+- 区别：
+
+  - 分类：输出的数据类型是离散数据
+
+    比如球场上预测球场的人数，因为人数只能是0,1,2,..的离散数据，所以是分类任务。
+
+  - 回归：输出的数据类型是连续数据
+
+    比如球场上预测球的速度，因为速度是0,0.1,0.11,...的连续数据，所以是回归任务。
+
+- 目标检测：要检测出图片中物体的位置和类别
+
+  在目标检测中既采用分类又采用了回归。
+
+  以RCNN为例，分类主要就用来检测矩形框中物体的类别，而回归往往用来对矩形框进行微调以使矩形框能更好的包裹物体
