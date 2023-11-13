@@ -382,6 +382,11 @@ sudo apt install robotpkg-py35-eigenpy
    sudo make install
    ```
 
+3. 卸载
+
+   ```shell
+   xargs rm < install_manifest.txt
+   ```
 
 ## 2. 基本使用
 
