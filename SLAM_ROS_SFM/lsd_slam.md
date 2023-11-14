@@ -10,11 +10,25 @@
   ```
   ubuntu20
   ros:Noetic
-  opencv:4.7
+  opencv:4.8.1
   qt:5.12.8
   ```
 
-  
+- 安装
+
+  ```shell
+  # 在lsd-ws/src下clone修改过的lsd-slam版本
+  https://github.com/Fernweh-yang/SLAM_Code_Learning/tree/main/lsd_ws/src
+  catkin_make
+  ```
+
+- 运行
+
+  ```
+  rosrun lsd_slam_core dataset _files:=/home/yang/Downloads/LSD_room_images/LSD_room/images _hz:=1 _calib:=/home/yang/Downloads/LSD_room_images/LSD_room/cameraCalibration.cfg
+  ```
+
+  - 如果遇到gtk2.0和3.0冲突的问题，可能是多个opencv版本带来的。将ros和opencv所有版本都删除重装后就可以了
 
 # 基本原理
 
