@@ -947,7 +947,46 @@ void SmartPointerDemo2()
   
   ```
   
-  
+
+## 9. 确保类只有一个实例
+
+在C++中，将**构造函数私有化**是一种实现单例模式（Singleton Pattern）的常见手段之一。
+
+lsd-slam中内存管理就用到了这个技术，参见lsd_slam_core/DataStructures/FrameMemory.h.
+
+下面是一个示例：
+
+```c++
+class Singleton {
+private:
+    // 将构造函数私有化
+    Singleton() {}
+
+public:
+    // 静态成员函数，用于获取单例对象
+    static Singleton& getInstance() {
+        static Singleton instance;  // 保证只创建一个实例
+        return instance;
+    }
+
+    // 其他成员函数和数据
+    // ...
+};
+
+int main() {
+    // 错误示例：试图直接调用构造函数
+    // Singleton obj;  // 编译错误，构造函数是私有的
+
+    // 正确示例：通过静态成员函数获取单例对象
+    Singleton& singleton = Singleton::getInstance();
+    // 使用 singleton 对象进行操作
+    // ...
+
+    return 0;
+}
+```
+
+
 
 # C++小功能
 
