@@ -2,6 +2,7 @@
 
 - [论文](https://jakobengel.github.io/pdf/engel14eccv.pdf)
 - [git 代码](https://github.com/tum-vision/lsd_slam)
+- [参考博客](https://blog.csdn.net/lancelot_vim?type=blog)
 
 # 安装使用
 
@@ -68,6 +69,12 @@ LSD-SLAM系统分为3个模块
 
    如果不将其构建为新关键帧，则更新参考关键帧的深度（Depth Map Refinement）
 
+   不管构不构建新的关键帧，都需要进行深度估计，深度估计有3步：
+
+   1. 用立体视觉方法来从先前的帧得到新的深度估计
+   2. 深度图帧与帧之间的传播
+   3. 部分规范化已知深度
+
 3. Map Optimization
 
    主要完成3个任务
@@ -104,15 +111,131 @@ $$
 > - 如果为负值就说明负相关的
 > - 如果为0，也是就是统计上说的“相互独立”。
 
-## 地图的表示：
+## 关键帧表示
 
 - 地图由关键帧组成；
-- 关键帧组成：当前时刻的相机图像、逆深度图像、逆深度的方差（方差就是权重）；
+- 关键帧组成$K_i=(I_i,D_i,V_i)$：分别是当前时刻的相机图像、逆深度图像、逆深度的方差（方差就是权重）；
 
+然后根据光度误差计算出当前帧到关键帧之间的位姿变换
 
+## 深度地图估计
+
+1. 判断是否是关键帧
+
+   根据相机移动来判断的，如果相机移动了足够远，那么就重新创建一个关键帧，否则就refine当前的关键帧
+
+2. 深度估计
+
+   不管是创建新的关键帧还是优化当前关键帧，都需要对新的一帧进行深度估计
+
+3. 深度估计：选择参考帧
+
+   > We use the oldest frame the pixel was observed in, where the disparity search range and the observation angle do not exceed a certain threshold (see Fig. 4). If a disparity search is unsuccessful (i.e., no good match is found), the pixel’s “age” is increased, such that subsequent disparity searches use newer frames where the pixel is likely to be still visible.
+
+   - 通过视察disparity来搜索最先看到同一像素的帧，一直到当前帧的前一帧作为参考帧。
+   - 如果搜索失败，说明没有帧和当前帧有看到同一像素的。那么就加大这些像素的年龄，然后在新的帧里面去继续搜索。
+
+4. 深度估计：对每一帧的每个像素进行匹配
+
+   对于每个像素，沿着极线方向搜索匹配，如果深度估计是可用的，那么搜索范围限制到均值加减2倍方差的区间，如果不可用，那么所有的差异性都需要被搜索，并使用，最后使用SSD误差作匹配算法
+
+   >  误差平方和算法（Sum of Squared Differences，简称SSD算法）是一种基于灰度的图像匹配算法，其他类似的算法还有平均绝对差算法（MAD）、绝对误差和算法（SAD）、平均误差平方和算法（MSD）、归一化积相关算法（NCC）、序贯相似性算法（SSDA）。
+
+5. 深度估计：计算深度
+
+   - 参考帧上极线的计算：需要用到几何差异误差
+   - 极线上得到最好的匹配位置：需要得到图像差异误差
+   - 通过匹配位置计算出最佳的深度：根据基线量化误差
+
+6. 如果创建关键帧：
+
+   > Once a new frame is chosen to become a keyframe, its depth map is initialized by projecting points from the previous keyframe into it, followed by one iteration of spatial regularization and outlier removal as proposed in 9. Afterwards, the depth map is scaled to have a mean inverse depth of one - this scaling factor is directly incorporated into the sim(3) camera pose. Finally, it replaces the previous keyframe and is used for tracking subsequent new frames
+
+   新的关键帧需要之前的关键帧将点投影过来(投影方案已经在深度前传介绍过)，得到这一帧的有效点，深度通过sim(3)变换投影均值和缩放因子，最后用这个关键帧替换掉之前的关键帧
+
+7. 如果不创建关键帧
+
+   > A high number of very efficient small- baseline stereo comparisons is performed for image regions where the expected stereo accuracy is sufficiently large, as described in 9. The result is incorporated into the existing depth map, thereby refining it and potentially adding new pixels – this is done using the filtering approach proposed in 9.
+
+   如果不创建关键帧，那么就用当前的观测对之前的深度进行修正
+
+## 图优化
+
+使用图优化优化每一帧相对于世界坐标系的位姿
 
 # 代码
 
 ## LSD-SLAM核心库文件
 
 ![image-20231113001505361](https://raw.githubusercontent.com/Fernweh-yang/ImageHosting/main/img/LSD-SLAM%E4%BB%A3%E7%A0%81%E7%B1%BB%E8%A1%A8.png)
+
+## LSD-SLAM的内存管理
+
+代码文件都在`lsd_slam_core/src/DataStructures`目录下
+
+### 1. FrameMemory.h
+
+用于管理内存
+
+- 构造函数`FrameMemory()`
+
+  通过将构造函数FrameMemory()私有化(放在private:中)保证只能创建一个实例
+
+- `getbuffer()`和`getFloatBuffer()`
+
+  通过调用`allocateBuffer()`申请新的内存空间
+
+### 2. Frame.h
+
+lsd-slam中的地图是由一系列关键帧keyframe的姿态图表示的，每个关键帧由图像地图camera image + 逆深度地图inverse depth map + 逆深度地图variance of the inverse depth组成。
+
+这个文件就是用来构建每一帧的image, gradients, depth和depth variance pyramid
+
+- 结构体`struct Data{}`
+
+  定义了一系列金字塔：图像、梯度、深度、深度方差金字塔
+
+  根据setting.h定义的宏可以看到金字塔层数PYRAMID_LEVELS为5层。
+
+- 构造函数`Frame()`
+
+  会调用`initialize()`来初始化图像id，内存，位姿，相机内参，相机内参的逆，各种金字塔。
+
+  申请内存依靠的是FrameMemory.h中的`getFloatBuffer()`
+
+- 析构函数`~Frame()`
+
+  回收内存，依靠的是FrameMemory.h中的`returnBuffer()`
+
+- `require()`
+
+  这个函数先是在判断需要怎么样的数据,如果这个数据的该层金字塔还没创建,就调用相应的构建函数去构建。
+
+  构建函数分别有：
+
+  - `buildImage(level)`构建图像金字塔
+  - `buildGradients(level)`构建梯度金字塔
+  - `buildMaxGradients(level)`构建最大梯度金字塔
+
+  - `buildIDepthAndIDepthVar(level)`构建深度和深度方差（不确定度）金字塔
+
+- `minimizeInMemory()`
+
+  通过调用各个release()和clear_refPixelWasGood()函数来释放上面这些函数申请的内存。
+
+  release()中针对不同金字塔有函数：
+
+  - `releaseImage(level)`
+  - `releaseGradients(level)`
+  - `releaseMaxGradients(level)`
+  - `releaseIDepth(level)`
+  - `releaseIDepthVar(level)`
+
+- `setDepth()`给当前帧的金字塔第一层设置新的深度估计值
+- `setDepthFromGroundTruth()`把真实的深度设置给当前帧的金字塔
+
+- `prepareForStereoWith()`一些相似矩阵的预运算
+
+### 3. FramePoseStruct.h
+
+一些用于图优化相关的变量
