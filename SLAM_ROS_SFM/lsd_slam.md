@@ -239,3 +239,73 @@ lsd-slam中的地图是由一系列关键帧keyframe的姿态图表示的，每�
 ### 3. FramePoseStruct.h
 
 一些用于图优化相关的变量
+
+## LSD-SLAM的地图优化
+
+### 1. g2oTypeSim3Sophus.h
+
+本文件主要是用Sophus::Sim3d作为顶点(位姿)的数据结构，构建g2o的顶点和边
+
+- `class VertexSim3 : public g2o::BaseVertex<7, Sophus::Sim3d>`
+
+  优化的顶点，每个顶点都是Sim(3)三维相似变换矩阵
+
+- `class EdgeSim3 : public g2o::BaseBinaryEdge<7, Sophus::Sim3d, VertexSim3, VertexSim3>`
+
+  优化的边
+
+### 2. TrackableKeyFrameSearch.h
+
+本文件主要用于查找当前keyframe可以跟踪到的其他keyframe，以便将新约束放入图优化中
+
+- `TrackableKeyFrameSearch()`构造函数
+
+  创建SE3Tracker的实例
+
+- `findCandidates()`
+
+  寻找当前关键帧可以追踪到的其他关键帧(作为参考帧)
+
+- `findRePositionCandidate()`
+
+  寻找当前关键帧可以追踪到的其他关键帧，并计算该关键帧的分数，如果不够高重新计算该关键帧的位姿
+
+- `getRefFrameScore()`
+
+  得到参考帧的分数
+
+- `findEuclideanOverlapFrames()`
+
+  用来寻找某一个关键帧所有潜在的参考帧
+
+### 3. KeyFrameGraph.h
+
+这个类用于创建g2o需要使用的图
+
+- `KFConstraintStruct()`结构体构造函数
+
+  这个结构体主要包含图优化用到的变亮
+
+- `KeyFrameGraph()`类构造函数
+
+  构建一个新的g2o位姿图
+
+- `addKeyFrame()`
+
+  将新的关键帧添加到位姿图中去
+
+- `dumpMap()`
+
+  将关键帧图优化的结果以及相关的信息保存到指定的文件夹中
+
+- `insertConstraint()`
+
+  向关键帧图中添加一个新的约束（constraint），这个约束用 EdgeSim3 类表示
+
+- `optimize()`
+
+  执行图优化，只会更新顶点的位姿，关键帧的位姿没有更新，需要优化完后再调用`updateKeyFramePoses()`
+
+- `calculateGraphDistancesToFrame()`
+
+  计算一个给定的帧到图中所有其他帧的最短距离，并保存在distanceMap中
