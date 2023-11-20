@@ -988,6 +988,105 @@ int main() {
 
 
 
+## 10. 友元函数和友元类
+
+作用：为了在类的成员函数外部直接访问对象的**私有成员**。友元friend，相当于是说：朋友是值得信任的，所以可以对他们公开一些自己的隐私。
+
+> 类的私有变量只能被同一类的成员函数访问
+
+- **友元函数**
+
+  在定义一个类的时候，可以把一些函数（包括全局函数和其他类的成员函数）声明为“友元”，这样那些函数就成为该类的友元函数，在友元函数内部就可以访问该类对象的私有成员了。
+
+  - 写法：
+
+    ```c++
+    // 将全局函数声明为友元的写法如下：
+    friend  返回值类型  函数名(参数表);
+    
+    // 将其他类的成员函数声明为友元的写法如下：
+    friend  返回值类型  其他类的类名::成员函数名(参数表);
+    ```
+    
+  - 实例
+
+    ```c++
+    #include<iostream>
+    using namespace std;
+    
+    // 提前声明CCar类，以便后面的CDriver类使用
+    // 直接定义CCar类，是无法解决这个问题的，因为CCar类中需要用到CDriver类。因此，只能提前声明其中一个类
+    class CCar;  
+    
+    class CDriver
+    {
+    public:
+        void ModifyCar(CCar* pCar);  //改装汽车
+    };
+    
+    class CCar
+    {
+    private:
+        int price;
+        //声明为友元函数，所以作为非类函数的MostExpensiveCar()也能访问类的私有变量了
+        friend int MostExpensiveCar(CCar cars[], int total);  
+        //声明为友元函数，所以作为另一个类的函数ModifyCar()也能访问类的私有变量了
+        friend void CDriver::ModifyCar(CCar* pCar);  
+    };
+    
+    void CDriver::ModifyCar(CCar* pCar)
+    {
+        pCar->price += 1000;  //汽车改装后价值增加
+    }
+    
+    int MostExpensiveCar(CCar cars[], int total)  //求最贵气车的价格
+    {
+        int tmpMax = -1;
+        for (int i = 0; i<total; ++i)
+            if (cars[i].price > tmpMax)
+                tmpMax = cars[i].price;
+        return tmpMax;
+    }
+    ```
+
+- **友元类**
+
+  一个类 A 可以将另一个类 B 声明为自己的友元，类 B 的所有成员函数就都可以访问类 A 对象的私有成员
+
+  - 写法：
+
+    ```c++
+    friend  class  类名;
+    ```
+
+  - 示例
+
+    ```c++
+    class CCar
+    {
+    private:
+        int price;
+        //声明 CDriver 为自己的友元类，那么CDriver的所有函数都可以访问自己的私有变量
+        friend class CDriver;  
+    };
+    
+    class CDriver
+    {
+    public:
+        CCar myCar;
+        void ModifyCar()  //改装汽车
+        {
+            myCar.price += 1000;  //因CDriver是CCar的友元类，故此处可以访问其私有成员
+        }
+    };
+    int main()
+    {
+        return 0;
+    }
+    ```
+
+    
+
 # C++小功能
 
 ## 1. 按空格分割字符串
