@@ -240,6 +240,45 @@ lsd-slam中的地图是由一系列关键帧keyframe的姿态图表示的，每�
 
 一些用于图优化相关的变量
 
+## LSD-SLAM的跟踪
+
+### 1. TrackingReference.h
+
+这个类主要用于管理在tracking时用到的参考帧
+
+- `releaseAll()`
+
+  释放与当前参考帧有关的所有资源
+
+- `importFrame()`
+
+  加载帧
+
+- `makePointCloud()`
+
+  对参考帧某一层(level)构建点云，计算了每个像素的3D空间坐标，像素梯度，颜色和方差
+### 2. SE3Tracker.h
+
+Tracking线程的主题部分：求解两帧之间的SE3变换
+
+- `SE3Tracker()`
+
+  构造函数，读取相机内参，给各个变量分配内存
+
+ - `checkPermaRefOverlap()`
+
+   检查当前帧与参考帧之间的参考点的重叠度
+
+ - `calcResidualAndBuffers()`
+
+   计算变换得到的当前帧的残差和梯度
+
+   - `calcResidualAndBuffers_debugStart()`
+
+     将4个图像的每个像素都设为白色。
+
+ - 
+
 ## LSD-SLAM的地图优化
 
 ### 1. g2oTypeSim3Sophus.h
