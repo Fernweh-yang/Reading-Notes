@@ -242,6 +242,19 @@ lsd-slam中的地图是由一系列关键帧keyframe的姿态图表示的，每�
 
 ## LSD-SLAM的跟踪
 
+### 0. 整体结构
+
+```
+图像金字塔迭代level-4到level-1
+Step1: 对参考帧当前层构造点云(reference->makePointCloud)
+Step2: 计算变换到当前帧的残差和梯度(calcResidualAndBuffers)
+Step3: 计算法方差归一化残差(calcWeightsAndResidual)
+Step4: 计算雅克比向量以及A和b(calculateWarpUpdate)
+Step5: 计算得到收敛的delta，并且更新SE3(inc = A.ldlt().solve(b))
+重复Step2-Step5直到收敛或者达到最大迭代次数
+计算下一层金字塔
+```
+
 ### 1. TrackingReference.h
 
 这个类主要用于管理在tracking时用到的参考帧
@@ -271,13 +284,39 @@ Tracking线程的主题部分：求解两帧之间的SE3变换
 
  - `calcResidualAndBuffers()`
 
-   计算变换得到的当前帧的残差和梯度
+   论文公式13：计算参考点在当前帧下投影点的残差(光度误差)和梯度，并记录参考点在参考帧的逆深度和方差
 
    - `calcResidualAndBuffers_debugStart()`
 
      将4个图像的每个像素都设为白色。
+     
+   - `calcResidualAndBuffers_debugFinish()`
 
- - 
+     结束残差计算，如果save/plot为true，就保存/可视化计算的光度误差
+
+ - `calcWeightsAndResidual()`
+
+   计算光度误差损失函数(论文公式12)
+   $$
+   E_p(\mathbf\xi_{ji}) =\sum_{\mathbf{p}\in\Omega_{D_i}}
+   \Biggl\|\frac{r_p^2(\mathbf{p},\mathbf\xi_{ji})}{\sigma_{r_p(\mathbf{p},\mathbf\xi_{ji})}^2}\Biggr\|_\delta \tag{论文12式}
+   $$
+   计算归一化方差的光度误差系数(论文公式14) 和 Huber-weight(论文公式15)
+   $$
+   \sigma_{r_p(\mathbf{p},\mathbf\xi_{ji})}^2 := 2\sigma_I^2 + (\frac{\partial{r_p(\mathbf{p}, \mathbf\xi_{ji})}}{\partial{D_i(\mathbf{p})}})^2V_i(\mathbf{p}) \tag{论文14式}
+   $$
+   因为两帧之间位姿变换小所以作者只考虑了位移没考虑旋转，所以14式的梯度项简化为：
+   $$
+   \begin{split}
+   \frac{\partial{r_p(\mathbf{p},\mathbf\xi_{ji})}}{\partial{D_i(\mathbf{p})}}
+   &= \frac{\partial({I_i({\mathbf p}) - I_j(\omega({\mathbf p}, D_i({\mathbf p}), \xi_{ji})))}}{\partial{D_i(\mathbf{p})}} \\
+   &= - \frac{\partial{I_j(\mathbf{a})}}{\partial{\mathbf{a}}}\bigg|_{\mathbf{a}=\mathbf{p}} \cdot\frac{\partial{w(d)}}{\partial{d}}\bigg|_{d=D_i(\mathbf{p})} \\
+   &= -\begin{pmatrix}dxfx&dyfy\end{pmatrix}\cdot\begin{pmatrix}\frac{\mathbf{t}_x(1/d+\mathbf{t}_z)-\mathbf{t}_z(\mathbf{p}_x/d+\mathbf{t}_x)}{(1/d+\mathbf{t}_z)^2d} \\
+   \frac{\mathbf{t}_y(1/d+\mathbf{t}_z)-\mathbf{t}_z(\mathbf{p}_y/d+\mathbf{t}_y)}{(1/d+\mathbf{t}_z)^2d}\end{pmatrix}\\
+   &= -(dxfx\frac{\mathbf{t}_xz'-\mathbf{t}_zx'}{z'^2d} + dyfy\frac{\mathbf{t}_yz'-\mathbf{t}_zy'}{z'^2d})
+   \end{split} 
+   $$
+   
 
 ## LSD-SLAM的地图优化
 
