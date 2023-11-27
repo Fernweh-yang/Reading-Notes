@@ -276,15 +276,15 @@ Tracking线程的主题部分：求解两帧之间的SE3变换
 
 - `SE3Tracker()`
 
-  构造函数，读取相机内参，给各个变量分配内存
+  **构造函数，读取相机内参，给各个变量分配内存**
 
  - `checkPermaRefOverlap()`
 
-   检查当前帧与参考帧之间的参考点的重叠度
+   **检查当前帧与参考帧之间的参考点的重叠度**
 
  - `calcResidualAndBuffers()`
 
-   论文公式13：计算参考点在当前帧下投影点的残差(光度误差)和梯度，并记录参考点在参考帧的逆深度和方差
+   **论文公式13：计算参考点在当前帧下投影点的残差(光度误差)和梯度，并记录参考点在参考帧的逆深度和方差**
 
    - `calcResidualAndBuffers_debugStart()`
 
@@ -296,7 +296,7 @@ Tracking线程的主题部分：求解两帧之间的SE3变换
 
  - `calcWeightsAndResidual()`
 
-   计算光度误差损失函数(论文公式12)
+   **计算光度误差损失函数**(论文公式12)
    $$
    E_p(\mathbf\xi_{ji}) =\sum_{\mathbf{p}\in\Omega_{D_i}}
    \Biggl\|\frac{r_p^2(\mathbf{p},\mathbf\xi_{ji})}{\sigma_{r_p(\mathbf{p},\mathbf\xi_{ji})}^2}\Biggr\|_\delta \tag{论文12式}
@@ -317,6 +317,31 @@ Tracking线程的主题部分：求解两帧之间的SE3变换
    \end{split} 
    $$
    
+
+- `calculateWarpUpdate()`
+
+  **计算公式12的雅可比以及最小二乘法，最后更新得到新的位姿变换SE3**
+
+  12式的分母被当成了一个系数不参与求导，所以只有分子的光度误差参与求导，根据高斯牛顿算法并采用左乘扰动后，12式优化的形式：
+  $$
+  \delta\mathbf{\xi}^{*}=\text{arg}\min_{\delta\mathbf{\xi}}E_p(\delta\mathbf{\xi}\circ\mathbf{\xi})=\text{arg}\min_{\delta\mathbf{\xi}}\sum_i{r_i^2(\delta\mathbf{\xi}}\circ\mathbf{\xi})
+  $$
+  将光度误差$r_i$一阶泰勒展开后代入上式可得：
+  $$
+  \delta\mathbf{\xi}^{(n)}＝-(\mathbf{J}^T\mathbf{J})^{-1}\mathbf{J}^T\mathbf{r}(\mathbf{\xi}^{(n)})
+  \quad\text{with}\quad
+  \mathbf{J}=\frac{\partial{\mathbf{r}(\epsilon\circ\mathbf{\xi}^{(n)})}}{\partial\epsilon}\bigg|_{\epsilon=0}
+  $$
+  这里的雅可比矩阵用到链式求导：
+  $$
+  \begin{split}
+  \mathbf{J}_i &= \frac{\partial{r_i(\epsilon\circ\mathbf{\xi}^{(n)})}}{\partial\epsilon}\bigg|_{\epsilon=0}\\ &= -\frac{\partial{I(\omega({\mathbf{p}_i},D_{ref}({\mathbf{p}_i}),\epsilon\circ\xi))}}{\partial{\epsilon}}\bigg|_{\epsilon=0}\\ &= -\frac{\partial{I(\mathbf{b})}}{\partial{\mathbf{b}}}\bigg|_{\mathbf{b}=\mathbf{p'}_i} \cdot \frac{\partial{\omega_n(\mathbf{q})}}{\partial{\mathbf{q}}}\bigg|_{\mathbf{q}=\mathbf{p'}_i{\cdot}z_i'} \cdot \frac{\partial{\omega_s(\epsilon\circ\mathbf{\xi}^{(n)})}}{\partial{\epsilon}}\bigg|_{\epsilon=0}\\ &= -\begin{pmatrix}dxfx&dyfy\end{pmatrix}\cdot \begin{pmatrix}1/z'&0&-x'/z'^2 \\ 0&1/z'&-y'/z'^2 \end{pmatrix} \cdot \begin{pmatrix}I|-[\mathbf{p}_i'{\cdot}z_i']_\times\end{pmatrix}\\ &= -\begin{pmatrix}1/z'{\cdot}dxfx\\1/z'{\cdot}dyfy\\-x'/z'^2{\cdot}dxfx-y'/z'^2{\cdot}dyfy\end{pmatrix}^{T} \cdot \left(\begin{array}{ccc|ccc}1&0&0&0&z'&-y'\\0&1&0&-z'&0&x'\\0&0&1&y'&-x'&0\end{array}\right)\\
+  &=-\begin{pmatrix}1/z'{\cdot}dxfx \\ 1/z'{\cdot}dyfy \\ -x'/z'^2{\cdot}dxfx-y'/z'^2{\cdot}dyfy \\ -x'y'/z'^2{\cdot}dxfx-(z'^2+y'^2)/z'^2{\cdot}dyfy \\ (1+x'^2/z'^2)dxfx+x'y'/z'^2dyfy \\ x'/z'{\cdot}dyfy-y'/z'{\cdot}dxfx\end{pmatrix}^T
+  \end{split}
+  $$
+  然后更新最小二乘问题Ax=b的系数A和b
+
+  最后用`Eigen:ldlt`来求解这个最小二乘问题，得到
 
 ## LSD-SLAM的地图优化
 
