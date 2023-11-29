@@ -266,4 +266,20 @@ lsd
 
       比如我要调试core的node: dataset，就选dataset
 
-## 
+# Plugins
+
+## 1. Codewhisperer
+
+亚马逊出的编程[AI助手](https://aws.amazon.com/codewhisperer/resources/?nc1=h_ls)
+
+### 下载
+
+VSCODE中搜索AWS Toolkit下载后登录账号就可使用
+
+### 使用
+
+- 写好注释后，通常会自动触发生成代码建议，如果没触发按`alt+c`手动触发
+  - 按`tab`接受代码建议
+  - 按`esc`不接受
+  - 按$ctrl+左右键$单独接受
+
