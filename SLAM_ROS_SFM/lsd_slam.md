@@ -263,7 +263,9 @@ lsd-slam中的地图是由一系列关键帧keyframe的姿态图表示的，每�
 
 ### 3. FramePoseStruct.h
 
-一些用于图优化相关的变量
+- `getCamToWorld()`
+
+  得到当前帧的绝对位姿：不停的递归相对位姿，直到得到当前帧相对于世界坐标系的位姿，即绝对位姿
 
 ## LSD-SLAM的跟踪
 
