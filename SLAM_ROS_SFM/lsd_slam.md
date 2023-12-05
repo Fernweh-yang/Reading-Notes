@@ -105,7 +105,50 @@ LSD-SLAM系统分为3个模块
 
    一旦关键帧变成参考帧，那么对应的深度图将不再进行优化
 
+
+
+## 四大线程
+
+主要的线程有4个：
+
+- 主线程：**跟踪线程**
+
+  在main_on_images.cpp中通过for遍历所有图片来不断循环调用`system->trackFrame(image.data, runningIDX, hz == 0, fakeTimeStamp)`
+
+- 子线程1：**建图线程**
+
+  在SlamSystem.cpp中的`mappingThreadLoop()`通过一个while不断循环调用`doMappingIteration()`。
+
+- 子线程2：**一致性约束线程**
+
+  在SlamSystem.cpp中的`constraintSearchThreadLoop()`通过一个while不断循环调用`findConstraintsForNewKeyFrames(newKF, true, true, 1.0);`。
+
+- 子线程3：**全局优化线程**
+
+  在SlamSystem.cpp中的`optimizationThreadLoop()`通过一个while不断循环调用`optimizationIteration(50, 0.001)`
+
+主线程遍历完所有的图片后，会调用`SlamSystem::finalize()`完成对3个子线程的最后一次通信，随后通过`~SlamSystem()`将三个子线程的while控制变量keepRunning设为false来退出所有的子线程，最后删除所有分配的内存。
+
+### 1. 跟踪&建图
+
+依靠`unmappedTrackedFramesSignal`条件变量进行控制：如果建图失败，建图线程会被这个条件变量锁住，需要等待跟踪线程的唤醒。
+
+建图失败的可能：
+
+1. 跟踪线程还没执行初始化`randomInit()`
+2. 如果setting.cpp中的`doMapping`变量被设成了false，默认为true如果为false建图线程相当于没了。
+3. 用当前帧更新参考帧(最新的关键帧)的深度图`updateKeyframe()`失败了
+
+跟踪线程什么时候会唤醒：
+
+1. 跟踪出问题了需要重定位，`trackingIsGood`此时为false
+2. 每一次跟踪循环结束时，都会唤醒一次。
+
+
+
 ## 不确定度计算
+
+来源于作者的另一篇论文：Semi-Dense Visual Odometry for a Monocular Camera
 
 一个函数$f(X)$由于它的输入$X$不确定而引起的不确定度可以由如下公式计算：
 $$
@@ -122,6 +165,58 @@ $$
 > - 如果为正值，则说明两者是正相关的(从协方差可以引出“相关系数”的定义)
 > - 如果为负值就说明负相关的
 > - 如果为0，也是就是统计上说的“相互独立”。
+
+### 深度不确定度
+
+当前帧和参考帧匹配后，最佳匹配点的逆深度可以表示为：
+$$
+d^*=d(I_0,I_1,\xi,\pi) \tag{2}
+$$
+其中$\xi$为两帧的相对位姿，$\pi$为相机投影模型参数。误差方差为：
+$$
+\sigma_d=J_d\Sigma J_d^T \tag{3}
+$$
+其中$J_d$是深度的雅可比，$\Sigma$是输入误差的方差
+
+### 深度的3个误差项
+
+参考博客：https://blog.csdn.net/kokerf/article/details/78006703?spm=1001.2014.3001.5502
+
+#### 1. 几何视差误差（Geometric disparity error）
+
+![image-20231204052553676](https://raw.githubusercontent.com/Fernweh-yang/ImageHosting/main/img/lsd%E5%87%A0%E4%BD%95%E8%A7%86%E5%B7%AE%E8%AF%AF%E5%B7%AE.png)
+
+该误差引起的方差为：
+$$
+\sigma_{\lambda(\xi,\pi)}^2=J_{\lambda^*(l_0)}\begin{pmatrix}\sigma_l^2&0\\0&\sigma_l^2\end{pmatrix}J_{\lambda^*(l_0)}^T=\frac{\sigma_l^2}{\langle g,l\rangle^2}\tag{4}
+$$
+
+
+#### 2. 光度视差误差（photometric disparity error）
+
+![image-20231204052723043](https://raw.githubusercontent.com/Fernweh-yang/ImageHosting/main/img/lsd%E5%85%89%E5%BA%A6%E8%A7%86%E5%B7%AE%E8%AF%AF%E5%B7%AE.png)
+
+该误差引起的方差为：
+$$
+\sigma_{\lambda(I)}^2=\text{Var}(\lambda^*(I))=(\text{Var}(i_{ref})+\text{Var}(I_p))g_p^{-2}=\frac{2\sigma_i^2}{g_p^2}
+\tag{5}
+$$
+
+#### 3. 逆深度计算误差（Pixel to inverse depth conversion）
+
+当旋转比较小的时候，逆深度和视差近似成一个比例关系，所以构造的逆深度的观测方差由前面2个误差因素引起：像素位置 + 两图像的基线长度
+$$
+\sigma_{d,\text{obs}}^2=\alpha^2\begin{pmatrix}\sigma_{\lambda(\xi,\pi)}^2+\sigma_{\lambda(I)}^2\end{pmatrix}\tag{6}
+$$
+这里的像素逆深度系数$\alpha$:
+$$
+\alpha:=\frac{\partial{d}}{\partial{\lambda}}=\frac{\partial{d}}{\partial{x}}\frac{\partial{x}}{\partial{u}}\frac{\partial{u}}{\partial{\lambda}}=\frac{r_2p_k{\cdot}t_x-r_0p_k{\cdot}t_z}{(t_x-t_z{\cdot}x)^2}{\cdot}f_{x}^{inv}{\cdot}\frac{\partial{u}}{\partial{\lambda}}\tag{7}
+$$
+考虑到在极线上搜索匹配点的时候，是使用了多个点，因此给出逆深度误差的上限：
+$$
+\sigma_{d,\text{obs}}^2\le\alpha^2\begin{pmatrix}\text{min}\{\sigma_{\lambda(\xi,\pi)}^2\}+\text{min}\{\sigma_{\lambda(I)}^2\}\end{pmatrix}\tag{8}
+$$
+
 
 ## 关键帧和参考帧
 
@@ -142,6 +237,8 @@ $$
   
 
 ## 深度地图估计
+
+LSD-SLAM构建的是半稠密逆深度地图（semi-dense inverse depth map），只对有明显梯度的像素位置进行深度估计，用逆深度表示，并且假设逆深度服从高斯分布。
 
 1. 判断是否是关键帧
 
@@ -166,9 +263,17 @@ $$
 
 5. 深度估计：计算深度
 
-   - 参考帧上极线的计算：需要用到几何差异误差
-   - 极线上得到最好的匹配位置：需要得到图像差异误差
-   - 通过匹配位置计算出最佳的深度：根据基线量化误差
+   - 参考帧上极线的计算：几何差异误差
+
+     由极线位置引起
+
+   - 极线上得到最好的匹配位置：光度视差误差
+
+     由匹配点的位置引起
+
+   - 通过匹配位置计算出最佳的深度：逆深度计算误差
+
+     由匹配点位置和图像间基线长度引起
 
 6. 如果创建关键帧：
 
