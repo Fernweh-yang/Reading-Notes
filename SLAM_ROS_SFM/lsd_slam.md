@@ -53,7 +53,7 @@
 
   - 没有基于直接法的回环检测，因此还是需要依赖特征点方法来进行回环检测。
 
-## LSD-SLAM整体框架
+## 一、LSD-SLAM整体框架
 
 ![image-20231112202242729](https://raw.githubusercontent.com/Fernweh-yang/ImageHosting/main/img/LSD-SLAM%E6%A1%86%E6%9E%B6.png)
 
@@ -107,7 +107,7 @@ LSD-SLAM系统分为3个模块
 
 
 
-## 四大线程
+## 二、四大线程
 
 主要的线程有4个：
 
@@ -137,7 +137,7 @@ LSD-SLAM系统分为3个模块
 
 1. 跟踪线程还没执行初始化`randomInit()`
 2. 如果setting.cpp中的`doMapping`变量被设成了false，默认为true如果为false建图线程相当于没了。
-3. 用当前帧更新参考帧(最新的关键帧)的深度图`updateKeyframe()`失败了
+3. 在`updateKeyframe()`中如果当前关键帧没有可以用来更新自己深度图的普通帧
 
 跟踪线程什么时候会唤醒：
 
@@ -146,7 +146,7 @@ LSD-SLAM系统分为3个模块
 
 
 
-## 不确定度计算
+## 三、不确定度计算
 
 来源于作者的另一篇论文：Semi-Dense Visual Odometry for a Monocular Camera
 
@@ -217,26 +217,117 @@ $$
 \sigma_{d,\text{obs}}^2\le\alpha^2\begin{pmatrix}\text{min}\{\sigma_{\lambda(\xi,\pi)}^2\}+\text{min}\{\sigma_{\lambda(I)}^2\}\end{pmatrix}\tag{8}
 $$
 
+## 四、键帧和参考帧
 
-## 关键帧和参考帧
+- 关键帧：
+  - 第一帧会在被初始化时成为关键帧
+  - 每移动足够距离一个普通帧就可能被选为关键帧
+  - 只有关键帧会被构建深度图
+  - 只有关键帧会去计算绝对位姿并参与后端优化和回环检测
 
-- **参考帧：**
+- 参考帧：
+  - 最新的关键帧就是当前的参考帧
+  - 每一个关键帧会成为它后面至少5帧的参考帧
+  - 普通帧只会计算自己相对于参考帧的相对位姿
 
-  1. 初始阶段：第一帧作为参考帧，之后的帧的位姿估计都是相对于这个参考帧的
 
-  2. 关键帧选取：一些帧根据相机移动的距离，被选为关键帧。
+## 五、跟踪
 
-  3. 更新参考帧：随着位姿的不断更新，原来的参考帧逐渐失去作为参考帧的价值。在全局优化和局部回环时，一些关键帧被选为参考帧
+- 整体结构
 
-     参考帧不再参与全局优化。
+  ```
+  图像金字塔迭代level-4到level-1
+  Step1: 对参考帧当前层构造点云(reference->makePointCloud)
+  Step2: 计算变换到当前帧的残差和梯度(calcResidualAndBuffers)
+  Step3: 计算法方差归一化残差(calcWeightsAndResidual)
+  Step4: 计算雅克比向量以及A和b(calculateWarpUpdate)
+  Step5: 计算得到收敛的delta，并且更新SE3(inc = A.ldlt().solve(b))
+  Step6: 重复Step2-Step5直到收敛或者达到最大迭代次数
+  计算下一层金字塔
+  ```
 
-- 关键帧组成$K_i=(I_i,D_i,V_i)$：分别是当前时刻的相机图像、逆深度图像、逆深度的方差（方差就是权重）；
+ - `calcWeightsAndResidual()`
 
-  然后根据光度误差计算出当前帧到关键帧之间的位姿变换
+   **计算光度误差损失函数**(论文公式12)
+   $$
+   E_p(\mathbf\xi_{ji}) =\sum_{\mathbf{p}\in\Omega_{D_i}}
+   \Biggl\|\frac{r_p^2(\mathbf{p},\mathbf\xi_{ji})}{\sigma_{r_p(\mathbf{p},\mathbf\xi_{ji})}^2}\Biggr\|_\delta \tag{论文12式}
+   $$
+   其中分子$r_p$是光度误差，分母$\sigma$是误差系数(方差)。
 
-  
+   
 
-## 深度地图估计
+   计算归一化方差的光度误差系数(论文公式14) 
+   $$
+   \sigma_{r_p(\mathbf{p},\mathbf\xi_{ji})}^2 := 2\sigma_I^2 + (\frac{\partial{r_p(\mathbf{p}, \mathbf\xi_{ji})}}{\partial{D_i(\mathbf{p})}})^2V_i(\mathbf{p}) \tag{论文14式}
+   $$
+
+   - $D_i$：第i帧的深度图
+   - $V_i$：第i帧的方差图
+   - $\sigma_I$：Gaussian image intensity noise高斯图像强度噪声？
+
+   因为两帧之间位姿变换小所以作者只考虑了位移没考虑旋转，所以论文14式的梯度项简化为：
+   $$
+   \begin{split}
+   \frac{\partial{r_p(\mathbf{p},\mathbf\xi_{ji})}}{\partial{D_i(\mathbf{p})}}
+   &= \frac{\partial({I_i({\mathbf p}) - I_j(\omega({\mathbf p}, D_i({\mathbf p}), \xi_{ji})))}}{\partial{D_i(\mathbf{p})}} \\
+   &= - \frac{\partial{I_j(\mathbf{a})}}{\partial{\mathbf{a}}}\bigg|_{\mathbf{a}=\mathbf{p}} \cdot\frac{\partial{w(d)}}{\partial{d}}\bigg|_{d=D_i(\mathbf{p})} \\
+   &= -\begin{pmatrix}dxfx&dyfy\end{pmatrix}\cdot\begin{pmatrix}\frac{\mathbf{t}_x(1/d+\mathbf{t}_z)-\mathbf{t}_z(\mathbf{p}_x/d+\mathbf{t}_x)}{(1/d+\mathbf{t}_z)^2d} \\
+   \frac{\mathbf{t}_y(1/d+\mathbf{t}_z)-\mathbf{t}_z(\mathbf{p}_y/d+\mathbf{t}_y)}{(1/d+\mathbf{t}_z)^2d}\end{pmatrix}\\
+   &= -(dxfx\frac{\mathbf{t}_xz'-\mathbf{t}_zx'}{z'^2d} + dyfy\frac{\mathbf{t}_yz'-\mathbf{t}_zy'}{z'^2d})
+   \end{split} 
+   $$
+
+- `calculateWarpUpdate()`
+
+  **计算公式12的雅可比 然后 用最小二乘法求解位姿更新量，最后更新得到新的位姿变换SE3**
+
+  12式的分母被当成了一个系数不参与求导，所以只有分子的光度误差$r_p$参与求导：
+
+  光度误差$r_p$对于相机位姿的求导这里采用左乘扰动，12式优化的形式：
+  $$
+  \delta\mathbf{\xi}^{*}=\text{arg}\min_{\delta\mathbf{\xi}}E_p(\delta\mathbf{\xi}\circ\mathbf{\xi})=\text{arg}\min_{\delta\mathbf{\xi}}\sum_i{r_i^2(\delta\mathbf{\xi}}\circ\mathbf{\xi})
+  $$
+  将每一项光度误差$r_i$一阶泰勒展开
+  $$
+  r_i(\delta\xi\circ\mathbf{\xi})=r_i(\mathbf{\xi})+\mathbf{J}_i\delta\xi
+  $$
+  最后得到的优化的位姿增量为(其中光度误差$\mathbf{r}=(r_1,\cdots,r_k)^T$,k为参与优化的点的个数)：
+  $$
+  \delta\mathbf{\xi}^{(n)}＝-(\mathbf{J}^T\mathbf{J})^{-1}\mathbf{J}^T\mathbf{r}(\mathbf{\xi}^{(n)})
+  \quad\text{with}\quad
+  \mathbf{J}=\frac{\partial{\mathbf{r}(\epsilon\circ\mathbf{\xi}^{(n)})}}{\partial\epsilon}\bigg|_{\epsilon=0}\tag{1}
+  $$
+  这里的雅可比矩阵用到链式求导：
+  $$
+  \begin{split}
+  \mathbf{J}_i &= \frac{\partial{r_i(\epsilon\circ\mathbf{\xi}^{(n)})}}{\partial\epsilon}\bigg|_{\epsilon=0}\\ &= -\frac{\partial{I(\omega({\mathbf{p}_i},D_{ref}({\mathbf{p}_i}),\epsilon\circ\xi))}}{\partial{\epsilon}}\bigg|_{\epsilon=0}\\ &= -\frac{\partial{I(\mathbf{b})}}{\partial{\mathbf{b}}}\bigg|_{\mathbf{b}=\mathbf{p'}_i} \cdot \frac{\partial{\omega_n(\mathbf{q})}}{\partial{\mathbf{q}}}\bigg|_{\mathbf{q}=\mathbf{p'}_i{\cdot}z_i'} \cdot \frac{\partial{\omega_s(\epsilon\circ\mathbf{\xi}^{(n)})}}{\partial{\epsilon}}\bigg|_{\epsilon=0}\\ &= -\begin{pmatrix}dxfx&dyfy\end{pmatrix}\cdot \begin{pmatrix}1/z'&0&-x'/z'^2 \\ 0&1/z'&-y'/z'^2 \end{pmatrix} \cdot \begin{pmatrix}I|-[\mathbf{p}_i'{\cdot}z_i']_\times\end{pmatrix}\\ &= -\begin{pmatrix}1/z'{\cdot}dxfx\\1/z'{\cdot}dyfy\\-x'/z'^2{\cdot}dxfx-y'/z'^2{\cdot}dyfy\end{pmatrix}^{T} \cdot \left(\begin{array}{ccc|ccc}1&0&0&0&z'&-y'\\0&1&0&-z'&0&x'\\0&0&1&y'&-x'&0\end{array}\right)\\
+  &=-\begin{pmatrix}1/z'{\cdot}dxfx \\ 1/z'{\cdot}dyfy \\ -x'/z'^2{\cdot}dxfx-y'/z'^2{\cdot}dyfy \\ -x'y'/z'^2{\cdot}dxfx-(z'^2+y'^2)/z'^2{\cdot}dyfy \\ (1+x'^2/z'^2)dxfx+x'y'/z'^2dyfy \\ x'/z'{\cdot}dyfy-y'/z'{\cdot}dxfx\end{pmatrix}^T
+  \end{split}
+  $$
+  然后更新最小二乘问题Ax=b的系数A和b
+
+  最后用`Eigen:ldlt`来求解这个最小二乘问题，得到新的位姿
+
+- `calcWeightsAndResidual()`和上面计算光度误差损失一个函数
+
+  这个函数还会计算一个Huber-weight(代码中和论文公式15不一样)
+  $$
+  w(r)_\delta:=\begin{cases}
+  1 & \text{if}\quad |r|\le \delta \\[2ex]
+  \frac{\delta}{|r|} & \text{if}\quad |r|> \delta
+  \end{cases} \tag{代码实现的公式15}
+  $$
+  使用迭代变权重最小二乘（interatively re-weighted least-squares）可以减小外点（outliers）对算法的影响，所以1式的位姿更新量变成了：
+  $$
+  \delta\mathbf{\xi}^{(n)}=-(\mathbf{J}^T\mathbf{J})^{-1}\mathbf{J}^T\mathbf{W}\mathbf{r}(\mathbf{\xi}^{(n)})\tag{2}
+  $$
+  最后不用14讲里说的对Hession矩阵$J^TJ$求逆的方式来解，而是使用LDLT分解来求解，也就是在对优化模型求导之后把公式整理为 Ax=b 的形式，然后调用Eigen库的ldlt函数求解：
+  $$
+  \underbrace{(\mathbf{J}^T\mathbf{J})}_A\delta\mathbf{\xi}^{(n)}=\underbrace{-\mathbf{J}^T\mathbf{W}\mathbf{r}(\mathbf{\xi}^{(n)})}_b\tag{3}
+  $$
+
+## 六、深度地图估计
 
 LSD-SLAM构建的是半稠密逆深度地图（semi-dense inverse depth map），只对有明显梯度的像素位置进行深度估计，用逆深度表示，并且假设逆深度服从高斯分布。
 
@@ -287,7 +378,100 @@ LSD-SLAM构建的是半稠密逆深度地图（semi-dense inverse depth map）�
 
    如果不创建关键帧，那么就用当前的观测对之前的深度进行修正
 
-## 图优化
+## 七、回环
+
+在`SlamSystem::constraintSearchThreadLoop()`中会调用`SlamSystem::findConstraintsForNewKeyFrames()`来进行回环确认
+
+### 1.  SIM3下的回环跟踪
+
+**对比跟踪中SE3来看！**
+
+#### 1.1 得到Ax=b
+
+点$\mathbf{P}(p_x,p_y,d)$经过归一化后的相似变换后$\mathbf{P}'$：
+$$
+\mathbf{P}'=\mathbf{T}\mathbf{P}
+\\
+\begin{equation}
+\underbrace{\mathbf{p}' = \begin{pmatrix}x'/z'\\y'/z'\\1\end{pmatrix}}_{\omega_n}
+\quad\text{with}\quad
+\underbrace{\begin{pmatrix}x'\\y'\\z'\\1\end{pmatrix} := \text{exp}_{\mathfrak{sim}(3)}(\mathbf\xi)\begin{pmatrix}\mathbf{p}_x/d\\\mathbf{p}_y/d\\1/d\\1\end{pmatrix}}_{w_s} \tag{1}
+\end{equation}
+$$
+由于这里的相似矩阵 SIM3::T 比跟踪用的 SE3::T 多了个尺度项，所以代价函数变为：
+$$
+\begin{equation}
+E(\mathbf\xi_{ji}) =\sum_{\mathbf{p}\in\Omega_{D_i}}\Biggl\|
+\frac{r_p^2(\mathbf{p},\mathbf\xi_{ji})}{\sigma_{r_p(\mathbf{p},\mathbf\xi_{ji})}^2} + \frac{r_d^2(\mathbf{p},\mathbf\xi_{ji})}{\sigma_{r_d(\mathbf{p},\mathbf\xi_{ji})}^2}
+\Biggr\|_\delta \tag{2}
+\end{equation}
+$$
+2式中光度误差和方差与跟踪中一致：
+$$
+\begin{align}
+r_p(\mathbf{p},{\mathbf\xi_{ji}}) :&= I_i({\mathbf{p}}) - I_j(\omega({\mathbf{p}}, D_i({\mathbf{p}}), \mathbf\xi_{ji}))\tag{3}\\
+\sigma_{r_p(\mathbf{p},\mathbf\xi_{ji})}^2 :&= 2\sigma_I^2 + (\frac{\partial{r_p(\mathbf{p}, \mathbf\xi_{ji})}}{\partial{D_i(\mathbf{p})}})^2V_i(\mathbf{p})\tag{4}
+\end{align}
+$$
+2式中深度残差和方差为：
+$$
+\begin{align}
+r_d(\mathbf{p},\mathbf\xi_{ji}) &= [\mathbf{p}']_3-D_j([\mathbf{p}']_{1,2})  \tag{5}
+\\
+\sigma_{r_d(\mathbf{p},\mathbf\xi_{ji})}^2 &= V_j([\mathbf{p}']_{1,2})\begin{pmatrix}\frac{{\partial}r_d(\mathbf{p},\mathbf\xi_{ji})}{{\partial}D_j([\mathbf{p}']_{1,2})}\end{pmatrix} + V_i(\mathbf{p})\begin{pmatrix}\frac{{\partial}r_d(\mathbf{p},\mathbf\xi_{ji})}{{\partial}D_i(\mathbf{p})}\end{pmatrix}
+\tag{6}
+\end{align}
+$$
+和跟踪一样使用迭代变权重高斯牛顿算法，2式的优化形式为：
+$$
+\delta\mathbf{\xi}^{*} = \text{arg}\min_{\delta\mathbf{\xi}}\sum_{\mathbf{p}\in\Omega_{D_i}}\left(
+\frac{\omega_h}{\sigma_{r_p(\mathbf{p},\mathbf\xi^{(n)})}^2} \left(
+r_p(\mathbf{p},\mathbf\xi^{(n)})+\mathbf{J}_p(\xi^{(n)})\delta\mathbf{\xi}\right)^2 +\frac{\omega_h}{\sigma_{r_d(\mathbf{p},\mathbf\xi^{(n)})}^2}\left(r_d(\mathbf{p},\mathbf\xi^{(n)}+\mathbf{J}_d(\xi^{(n)})\delta\xi)\right)^2
+\right) \tag{7}
+$$
+一阶泰勒展开对位姿扰动$\delta\mathbf{\xi}$求偏导后，可得用eigen::ldlt来求解的Ax=b：
+$$
+\begin{equation}
+\underbrace{\left(\frac{\omega_h}{\sigma_{r_p}^2}\mathbf{J}_p^T\mathbf{J}_p + \frac{\omega_h}{\sigma_{r_d}^2}\mathbf{J}_d^T\mathbf{J}_d\right)}_{\mathbf A}\delta\xi =
+\underbrace{-\left(\frac{\omega_h r_p}{\sigma_{r_p}^2}\mathbf{J}_p + \frac{\omega_h r_p}{\sigma_{r_d}^2}\mathbf{J}_d\right)}_{\mathbf b}
+\end{equation} \tag{8}
+$$
+
+#### 1.2 光度误差的雅可比矩阵$\mathbf{J}_p$
+
+$$
+\begin{equation}
+\begin{split}
+\mathbf{J}_p &= \frac{\partial{r_i(\epsilon\circ\mathbf{\xi}^{(n)})}}{\partial\epsilon}\bigg|_{\epsilon=0}\\
+&=  -\frac{\partial{I(\mathbf{b})}}{\partial{\mathbf{b}}}\bigg|_{\mathbf{b}=\mathbf{p'}_i} \cdot \frac{\partial{\omega_n(\mathbf{q})}}{\partial{\mathbf{q}}}\bigg|_{\mathbf{q}=\mathbf{p'}_i{\cdot}z_i'} \cdot \frac{\partial{\omega_s(\epsilon\circ\mathbf{\xi}^{(n)})}}{\partial{\epsilon}}\bigg|_{\epsilon=0}\\
+&= -\begin{pmatrix}dxfx&dyfy\end{pmatrix}\cdot \begin{pmatrix}1/z'&0&-x'/z'^2 \\ 0&1/z'&-y'/z'^2 \end{pmatrix} \cdot \left(\begin{array}{c|c|c}I & -[\mathbf{p}_i'{\cdot}z_i']_\times & \mathbf{p}_i'{\cdot}z_i'\end{array}\right)\\
+&= -\begin{pmatrix}1/z'{\cdot}dxfx\\1/z'{\cdot}dyfy\\-x'/z'^2{\cdot}dxfx-y'/z'^2{\cdot}dyfy\end{pmatrix}^{T} \cdot \left(\begin{array}{ccc|ccc|c}1&0&0&0&z'&-y'&x'\\0&1&0&-z'&0&x'&y'\\0&0&1&y'&-x'&0&z'\end{array}\right)\\
+&=-\begin{pmatrix}1/z'{\cdot}dxfx \\ 1/z'{\cdot}dyfy \\ -x'/z'^2{\cdot}dxfx-y'/z'^2{\cdot}dyfy \\ -x'y'/z'^2{\cdot}dxfx-(z'^2+y'^2)/z'^2{\cdot}dyfy \\ (1+x'^2/z'^2)dxfx+x'y'/z'^2dyfy \\ x'/z'{\cdot}dyfy-y'/z'{\cdot}dxfx\\ 0\end{pmatrix}^T
+\end{split} \tag{9}
+\end{equation}
+$$
+
+#### 1.3 深度误差雅可比矩阵$\mathbf{J}_d$
+
+$$
+\begin{equation}
+\begin{split}
+\mathbf{J}_{d} &= \frac{\partial[\mathbf{p}']_3}{\partial\mathbf\epsilon}=\frac{\partial{{d(\mathbf{b})}}}{\partial\mathbf{b}}\bigg|_{\mathbf{b}=\mathbf{p'}{\cdot}z'}\cdot\frac{\partial{{\omega_s(\mathbf\epsilon\circ\mathbf\xi)}}}{\partial\mathbf\epsilon}\bigg|_{\mathbf\epsilon=0}\\
+&= \begin{pmatrix}0&0&1/{z'}^2\end{pmatrix}\cdot\left(\begin{array}{c|c|c}I&-(\mathbf{p'}{\cdot}z')^\land&\mathbf{p'}{\cdot}z'\end{array}\right)\\
+&= \begin{pmatrix}0&0&1/{z'}^2\end{pmatrix}\cdot\left(\begin{array}{ccc|ccc|c}1&0&0& 0&z'&-y'& x'\\ 0&1&0& -z'&0&x'& y'\\ 0&0&1& y'&-x'&0 &z'\end{array}\right)\\
+&=\begin{pmatrix}0&0&1/{z'}^2&y'/{z'}^2&-x'/{z'}^2&0&1/z'\end{pmatrix}
+\end{split} \tag{10}
+\end{equation}
+$$
+
+### 2. 增加回环跟踪的收敛半径
+
+在回环跟踪的时候，没法在图像对齐的时候有一个很好的初始化位置。因此论文中用了**两种增加收敛半径的方法**：
+
+1. 使用高效二阶最小化方法（Efficient Second Order Minimization，ESM）
+2. 从粗到细（Coarse-to-Fine）方法，也就是图像金字塔的方式。
+
+## 八、图优化
 
 使用图优化优化每一帧相对于世界坐标系的位姿
 
