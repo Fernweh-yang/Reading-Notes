@@ -11,7 +11,7 @@ Anaconda是一个环境管理软件，解决不同代码需要不同的环境时
 
 ## 2. 卸载
 
-- 直接app and features中卸载
+- 在`/home`下删除`miniconda`文件夹
 
 ## 3. Windows环境配置
 
