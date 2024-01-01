@@ -625,3 +625,127 @@ launch.json为：
 }
 ```
 
+
+
+# 7. 多线程
+
+## 7.1 条件变量和互斥锁
+
+- **条件变量为什么要和互斥锁一起使用**
+
+  锁是一种保护共享资源的机制，它可以确保同一时间只有一个线程可以访问共享资源。
+
+  条件变量是一种线程间通信机制，它允许线程在特定条件下等待或被唤醒。
+
+  因此，条件变量和锁的组合可以有效避免数据竞争和死锁等问题，确保线程之间的同步和互斥访问。
+
+- **条件变量的目的**：
+
+  用来进行线程间的同步。
+
+- **联合使用的过程**：
+
+  1. 条件变量被用来阻塞一个线程A，当条件不满足时，线程A往往解开相应的互斥锁并等待条件发生变化。
+
+  2. 一旦线程B改变了这个条件变量，线程B会唤醒一个或多个被此条件变量阻塞的线程。
+  3. 线程A们会重新锁定互斥锁并重新测试条件是否满足
+
+- **互斥锁的缺点和条件变量相应的优点**：
+
+  1. 互斥锁只有两种状态：锁定和非锁定。
+
+     而条件变量通过允许线程阻塞和等待另一个线程发送信号的方法弥补了互斥锁的不足，它常和互斥锁一起配合使用。
+
+  2. 互斥锁会进入忙等待：不断检查是否满足运行的条件。
+  
+     而条件变量不会进入忙等待，而是需要另一个线程来唤醒，这就降低了资源的占用
+
+## 7.2 其他一些同步机制
+
+- **信号量（Semaphore）：** 信号量是一种计数器，用于控制同时访问共享资源的线程数量。它允许多个线程进入临界区，但在达到特定数量后，其他线程需要等待。Python中有 `threading.Semaphore` 类可以使用。
+- **屏障（Barrier）：** 屏障用于同步多个线程，让它们在某个点上等待，直到所有线程都到达了这个点，然后它们可以一起继续执行。Python中有 `threading.Barrier` 类可以使用。
+- **事件（Event）：** 事件是一种简单的同步机制，用于线程之间的通信。一个线程可以设置事件，而其他线程可以等待这个事件的发生。一旦事件发生，等待的线程将被唤醒。Python中有 `threading.Event` 类可以使用。
+- **定时器（Timer）：** 定时器用于在一定时间后触发某个操作。它常用于执行定时任务。Python中有 `threading.Timer` 类可以使用。
+- **队列（Queue）：** 队列是一种线程安全的数据结构，可以用于在多个线程之间安全地传递数据。Python中有 `queue.Queue` 类可以使用。
+- **读写锁（Read-Write Lock）：** 读写锁允许多个线程同时读取共享资源，但在写入时会独占资源，防止其他线程读取或写入。Python中没有直接的读写锁类，但你可以使用 `threading.Lock` 来实现。
+
+
+
+## 7.3 python中条件变量的例子
+
+```python
+# 实现生产与消费者模式
+import threading, time
+from random import randint
+
+
+class Producer(threading.Thread):
+    def run(self):
+        global L
+        while True:
+            val = randint(0, 100)
+            # if lock_con.acquire():
+            #     L.append(val)
+            #     print(f"生产者:{self.name}, Append:{val},队列：{L}")
+            #     lock_con.notify()
+            #     lock_con.release()
+            with lock_con:
+                L.append(val)
+                print(f"生产者:{self.name}, Append:{val}, L = {L}")
+                lock_con.notify()
+            time.sleep(3)
+
+
+class Consumer(threading.Thread):
+    def run(self):
+        global L
+        while True:
+            with lock_con:
+                if len(L) == 0:
+                    print("队列为空，请等待。。。")
+                    lock_con.wait()
+                print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>')
+                print(f"消费者: {self.name}, Delete: {L[0]}")
+                del L[0]
+            time.sleep(0.5)
+
+
+if __name__ == '__main__':
+    L = []  # 消费物队列
+    lock_con = threading.Condition()
+    threads = []
+    # 若干个生产者线程
+    for i in range(3):
+        threads.append(Producer())
+    threads.append(Consumer())
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+```
+
+输出结果：
+
+```
+生产者:Thread-1, Append:80, L = [80]
+生产者:Thread-2, Append:46, L = [80, 46]
+生产者:Thread-3, Append:46, L = [80, 46, 46]
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+消费者: Thread-4, Delete: 80
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+消费者: Thread-4, Delete: 46
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+消费者: Thread-4, Delete: 46
+队列为空，请等待。。。
+生产者:Thread-1, Append:21, L = [21]
+生产者:Thread-3, Append:53, L = [21, 53]
+生产者:Thread-2, Append:45, L = [21, 53, 45]
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+消费者: Thread-4, Delete: 21
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+消费者: Thread-4, Delete: 53
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+消费者: Thread-4, Delete: 45
+队列为空，请等待。。。
+```
+
