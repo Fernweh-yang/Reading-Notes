@@ -7,6 +7,8 @@
 - 主体是：SLAM十四讲
 - 辅助教材：
   - State Estimation for Robotics： 针对第四章：李群与李代数 和 第六章：非线性优化（状态估计）
+- 因子图：
+  - [gtsam官网](https://gtsam.org/tutorials/intro.html#LyXCite-Kschischang01it)
 
 # 一、预备知识
 
@@ -5796,7 +5798,7 @@ target_link_libraries(direct_method ${OpenCV_LIBS} ${Pangolin_LIBRARIES} fmt::fm
 
 本质上可将后端优化看作一个**状态估计问题**：如何根据带有噪声的观测求系统状态的最优估计，在实现方式上分为滤波器和非线性优化法。
 
-## 1. 概述
+## 1. 概述+卡尔曼滤波
 
 ### 1.1 状态估计的概率解释
 
@@ -5868,35 +5870,106 @@ target_link_libraries(direct_method ${OpenCV_LIBS} ${Pangolin_LIBRARIES} fmt::fm
   $$
   \mathbf{w}_k \sim N(\mathbf{0},\mathbf{R}),\ \mathbf{v}_k\sim N(\mathbf{0},\mathbf{Q}) \tag{5}
   $$
+  $\mathbf{A}_k$：状态转移矩阵
+
+  $\mathbf{u}_k$：控制向量
+
+  $\mathbf{C}_k$：观测矩阵，将状态空间映射到观测空间
+
+  $\mathbf{R}$：过程噪声的协方差矩阵 
+
+  $\mathbf{Q}$：测量误差的协方差矩阵
+
   下面使用卡尔曼滤波器将k-1时刻的状态分布推导至k时刻，最终得到线性系统的最优无偏估计
 
   - 由于基于马尔可夫性假设，所以在实际编程中，我们只需要维护一个状态变量
   - 而又由于状态变量服从高斯分布，我们只需要维护状态变量的均值矩阵$\hat{\mathbf{x}}_k$和协方差矩阵$\hat{\mathbf{P}}_k$
 
-- 卡尔曼滤波由如下两步组成，并用$\hat{a}$表示后验，$\check{a}$表示先验分布：
+- 卡尔曼滤波由**5个方程+2个阶段**组成，并用$\hat{a}$表示后验，$\check{a}$表示先验分布：
 
   1. **预测**(prediction)
 
-     从上一时刻的状态，根据输入信息（有噪声）推断当前时刻的状态分布
+     从上一时刻的状态，根据输入信息（有噪声）推断当前时刻的状态分布。6.1式预测状态估计, 6.2式预测先验状态误差协方差
      $$
-     \check{\mathbf{x}}_k=\mathbf{A}_k\hat{\mathbf{x}}_{k-1}+\mathbf{u}_k\\
-     \check{\mathbf{P}}_k=\mathbf{A}_k\hat{\mathbf{P}}_{k-1}\mathbf{A}_k^T+\mathbf{R} \tag{6}
+     \begin{align}
+     \check{\mathbf{x}}_k=\mathbf{A}_k\hat{\mathbf{x}}_{k-1}+\mathbf{u}_k \tag{6.1}\\
+     \check{\mathbf{P}}_k=\mathbf{A}_k\hat{\mathbf{P}}_{k-1}\mathbf{A}_k^T+\mathbf{R} \tag{6.2}
+     \end{align}
      $$
 
+     > 状态$\mathbf{x}_k$举例来说：
+     >
+     > 现在对小车一维直线行进距离p和速度v的估计：
+     >
+     > 可将其观察状态:
+     > $$
+     > \mathbf{x}_k=\left [\begin{array}{cccc}
+     > p_k\\
+     > v_k \\
+     > \end{array}\right]=\left [\begin{array}{cccc}
+     > p_{k-1}+v_{k-1}\Delta t+\frac{1}{2}a_k\Delta t^2\\
+     > v_{k-1}+a_k\Delta t \\
+     > \end{array}\right]
+     > $$
+     > 写成状态方程, 6.1式：
+     > $$
+     > \mathbf{x}_k=\left [\begin{array}{cccc}
+     > p_k\\
+     > v_k \\
+     > \end{array}\right]=\left [\begin{array}{cccc}
+     > 1 & \Delta t\\
+     > 0 & 1 \\
+     > \end{array}\right]\left [\begin{array}{cccc}
+     > p_{k-1}\\
+     > v_{k-1} \\
+     > \end{array}\right]+\left [\begin{array}{cccc}
+     > \frac{1}{2}\Delta t^2 & 0\\
+     > \Delta t & 0 \\
+     > \end{array}\right]\left [\begin{array}{cccc}
+     > a_k\\
+     > 0 \\
+     > \end{array}\right]+\mathbf{w}_k
+     > $$
+  
+     > 先验状态协方差$\check{\mathbf{P}}_k$是什么？
+     >
+     > 是真实状态$\mathbf{x}_k$和状态估计$\check{\mathbf{x}}_k$之间的先验误差协方差
+     > $$
+     > \check{\mathbf{P}}_k=E[(\mathbf{x}_k-\check{\mathbf{x}}_k)(\mathbf{x}_k-\check{\mathbf{x}}_k)^T]
+     > $$
+  
   2. **更新**（correctiion/measurment update）
-
+  
      比较在当前时刻的状态输入（也叫**测量**值）和**预测**的状态变量， 从而对预测出的系统状态进行修正.
-
+  
      - 先计算卡尔曼增益K：
        $$
        \mathbf{K}=\check{\mathbf{P}}_k\mathbf{C}_k^T(\mathbf{C}_k\check{\mathbf{P}}_k\mathbf{C}_k^T+\mathbf{Q}_k)^{-1}\tag{7}
        $$
+  
+     - 然后计算后验概率分布, 8.1式更新状态，8.2式更新后验误差协方差
+       $$
+       \begin{align}
+       \hat{\mathbf{x}}_k=\check{\mathbf{x}}_k+\mathbf{K}(\mathbf{z}_k-\mathbf{C}_k\check{\mathbf{x}}_k)\tag{8.1}\\
+       \hat{\mathbf{P}}_k=(\mathbf{I}-\mathbf{KC}_k)\check{\mathbf{P}}_k \tag{8.2}
+       \end{align}
+       $$
 
-     - 然后计算后验概率分布
-       $$
-       \hat{\mathbf{x}}_k=\check{\mathbf{x}}_k+\mathbf{K}(\mathbf{z}_k-\mathbf{C}_k\check{\mathbf{x}}_k)\\
-       \hat{\mathbf{P}}_k=(\mathbf{I}-\mathbf{KC}_k)\check{\mathbf{P}}_k \tag{8}
-       $$
+- 5个方程的物理意义
+
+  - 6.1式：状态方程，通过它直接可以根据前一个状态估计一下当前状态。
+
+  - 6.2式：先验误差协方差方程，通过它可以看到由状态方程预测的状态和真实状态之间的方差（不确定性，可靠性）有多少
+
+  - 7式：约束优化条件，使后验误差协方差$\hat{\mathbf{P}}_k$最小，得到卡尔曼增益K
+
+  - 8.1式：状态更新，得到**我们想要的最佳状态估计**
+
+    通过该式可以发现，Kalman滤波就是一个加权平均的过程：
+
+    对态估计和测量估计的加权平均：哪个估计的不确定性低(更可靠)哪个的权重就大，这个权重在8.1式的体现就是卡尔曼增益K。
+
+  - 8.2式：后验误差协方差方程$\hat{\mathbf{P}}_k$，在先验误差协方差方程$\check{\mathbf{P}}_k$的基础上加入测量过程$\mathbf{C}_k$的影响，更新下一时刻的先验值$\check{\mathbf{P}}_{k+1}$
 
 ### 1.3 非线性系统和EKF
 
@@ -5936,6 +6009,96 @@ EKF有着如下局限性：
 4. EKF没有异常检测机制，导致系统在异常值时容易发散。
 
 所以在相同计算量下，非线性优化通常比EKF在精度和鲁棒性上更好。
+
+
+
+### 1.5 一个DEMO代码
+
+用于估计小汽车一维直线运动状态的kalman滤波器，状态包括位置p和速度v，观测值也是位置p和速度v。
+
+```matlab
+% 初始化状态变量
+p = 0; % 位置
+v = 80; % 速度，假设为80m/s
+
+% 状态向量
+x = [p; v];
+
+% 状态转移矩阵F
+dt = 1; % 时间间隔，假设为1秒
+F = [1 dt; 0 1]; % 假设匀速运动
+
+% 观测矩阵
+H = [1 0; 0 1]; % 直接观测位置和速度
+
+% 过程噪声协方差矩阵
+Q = [1 0; 0 1];
+
+% 观测噪声协方差矩阵
+R = [10 0; 0 10]; % 假设观测噪声较大
+
+% 初始估计误差协方差
+P = [1 0; 0 1];
+
+% 模拟数据
+% 真实位置和速度（不可观测）
+true_p = 0;
+true_v = 80;
+
+% 初始化记录真实值的数组
+true_positions = zeros(1, 50);
+true_velocities = zeros(1, 50);
+
+% 运行Kalman滤波器
+for k = 1:50
+    % 预测
+    x = F * x;
+    P = F * P * F' + Q;
+    
+    % 更新观测数据
+    true_p = true_p + true_v * dt;
+    true_v = true_v; % 假设真实速度不变
+    obs_p = true_p + randn*sqrt(R(1,1));
+    obs_v = true_v + randn*sqrt(R(2,2));
+    
+    % 更新
+    Z = [obs_p; obs_v]; % 观测值
+    y = Z - H * x; % 观测残差
+    S = H * P * H' + R; % 残差协方差
+    K = P * H' / S; % 卡尔曼增益
+    x = x + K * y; % 更新状态估计
+    P = (eye(2) - K * H) * P; % 更新估计误差协方差
+    
+    % 保存数据用于绘图
+    positions(k) = x(1);
+    velocities(k) = x(2);
+    true_positions(k) = true_p;
+    true_velocities(k) = true_v;
+end
+
+% 绘制结果
+t = 1:k;
+figure;
+subplot(2,1,1);
+plot(t, positions, 'r', 'LineWidth', 2);
+hold on;
+plot(t, true_positions, 'k--', 'LineWidth', 2);
+hold off;
+title('位置估计');
+xlabel('时间 (秒)');
+ylabel('位置 (米)');
+legend('估计位置', '真实位置');
+
+subplot(2,1,2);
+plot(t, velocities, 'r', 'LineWidth', 2);
+hold on;
+plot(t, true_velocities, 'k--', 'LineWidth', 2);
+hold off;
+title('速度估计');
+xlabel('时间 (秒)');
+ylabel('速度 (米/秒)');
+legend('估计速度', '真实速度');
+```
 
 ## 2. BA与图优化
 
@@ -7499,3 +7662,6 @@ target_link_libraries(pose_graph_g2o_lie
 
 
 
+# * 因子图
+
+## 1. Factor Graphs因子图
