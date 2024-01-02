@@ -674,78 +674,91 @@ launch.json为：
 ## 7.3 python中条件变量的例子
 
 ```python
-# 实现生产与消费者模式
-import threading, time
-from random import randint
+class SLAM():
+    def __init__(self,config):
+        self.config = config
+        self.device = torch.device("cuda" if torch.cuda.is_available else "cpu")
+
+        # *********** 多线程通信用 ***********
+        self.keepRunning = True                         # 关闭slam系统时转为false
+        self.newConstraintAdded = False                 # 在constraintSearch线程中为位置图添加新的顶点后会转为true
+        self.newConstraintMutex = threading.Lock()      # 用于优化线程的锁
+        self.newConstraintSignal= threading.Condition(self.newConstraintMutex) # 用于优化线程的条件变量
 
 
-class Producer(threading.Thread):
+        # *********** 创建3个子线程 ***********
+        self.thread_mapping = threading.Thread(target=self.mappingThreadLoop,args=())
+        self.thread_constraint_search = threading.Thread(target=self.constarintSearchThreadLoop,args=())
+        self.thread_optimization = threading.Thread(target=self.optimizationThreadLoop,args=())
+        
+        # *debug
+        self.index = 0
+
+        
+    def mappingThreadLoop(self):
+        print('Started mapping thread')
+
+        
+    def constarintSearchThreadLoop(self):
+        print('Started constraint search thread')
+		# 循环执行当前线程
+        while self.keepRunning:
+            time.sleep(1)
+            self.index = self.index+1
+            print("现在：",self.index)
+
+            if self.index == 5:
+                """
+                使用with可以在退出代码块的时候，自动释放锁
+                比手动调用acquire()和release()更加的安全
+                """
+                with self.newConstraintMutex:
+                    self.newConstraintAdded = True
+                    self.newConstraintSignal.notify_all()
+                break
+
+                
+    def optimizationThreadLoop(self):
+        print('Started optimization thread')
+		# 循环执行当前线程
+        while self.keepRunning:
+            with self.newConstraintMutex:
+                if not self.newConstraintAdded:
+                    self.index = self.index + 1
+                    print("等待：",self.index)
+                    self.newConstraintSignal.wait()
+                self.newConstraintAdded = False
+            print("执行：",self.index)
+
+            
     def run(self):
-        global L
-        while True:
-            val = randint(0, 100)
-            # if lock_con.acquire():
-            #     L.append(val)
-            #     print(f"生产者:{self.name}, Append:{val},队列：{L}")
-            #     lock_con.notify()
-            #     lock_con.release()
-            with lock_con:
-                L.append(val)
-                print(f"生产者:{self.name}, Append:{val}, L = {L}")
-                lock_con.notify()
-            time.sleep(3)
+        print('Started SLAM System')
+        print(self.device)
+        # *********** 启动3个子线程 ***********
+        self.thread_mapping.start()
+        self.thread_constraint_search.start()
+        self.thread_optimization.start()
 
-
-class Consumer(threading.Thread):
-    def run(self):
-        global L
-        while True:
-            with lock_con:
-                if len(L) == 0:
-                    print("队列为空，请等待。。。")
-                    lock_con.wait()
-                print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>')
-                print(f"消费者: {self.name}, Delete: {L[0]}")
-                del L[0]
-            time.sleep(0.5)
-
-
-if __name__ == '__main__':
-    L = []  # 消费物队列
-    lock_con = threading.Condition()
-    threads = []
-    # 若干个生产者线程
-    for i in range(3):
-        threads.append(Producer())
-    threads.append(Consumer())
-    for t in threads:
-        t.start()
-    for t in threads:
-        t.join()
+cfg = config.load_config("....")
+slam = SLAM(cfg)
+slam.run()
 ```
 
 输出结果：
 
 ```
-生产者:Thread-1, Append:80, L = [80]
-生产者:Thread-2, Append:46, L = [80, 46]
-生产者:Thread-3, Append:46, L = [80, 46, 46]
->>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-消费者: Thread-4, Delete: 80
->>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-消费者: Thread-4, Delete: 46
->>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-消费者: Thread-4, Delete: 46
-队列为空，请等待。。。
-生产者:Thread-1, Append:21, L = [21]
-生产者:Thread-3, Append:53, L = [21, 53]
-生产者:Thread-2, Append:45, L = [21, 53, 45]
->>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-消费者: Thread-4, Delete: 21
->>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-消费者: Thread-4, Delete: 53
->>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-消费者: Thread-4, Delete: 45
-队列为空，请等待。。。
+Start running...
+Started SLAM System
+cuda
+Started mapping thread
+Started constraint search thread
+Started optimization thread
+等待： 1
+现在： 2
+现在： 3
+现在： 4
+现在： 5
+执行： 5
+等待： 6
 ```
 
