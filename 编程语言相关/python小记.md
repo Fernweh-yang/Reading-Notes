@@ -762,3 +762,71 @@ Started optimization thread
 等待： 6
 ```
 
+# 8. 多进程
+
+python用`multiprocessing`库来实现多进程，该库提供了 `Value`、`Array`、`String` 类型的对象用于跨进程共享数据。然而，它并没有直接提供对 `list` 和 `dict` 的支持。这是因为 `list` 和 `dict` 是可变的数据类型，直接在进程间共享可能导致复杂的同步和锁定问题。
+
+但可以通过 `multiprocessing.Manager` 创建一个共享的 `Manager` 对象，然后使用它来创建共享的 `list` 或 `dict`。这样可以确保适当的同步和锁定机制被应用
+
+例子：
+
+一个SLAM类，类的run函数会生成3个子进程，分别运行不同函数，他们之间会有 Array、Value、list、dict 和 String 类型的共享变量
+
+```python
+from multiprocessing import Process, Manager, Value, Array
+
+class SLAM:
+    def __init__(self, config):
+        self.config = config
+
+    def modify_shared_data(self, shared_num, shared_list, shared_dict, shared_str):
+        shared_num.value = 3.1415927
+        shared_list.append(42)
+        shared_dict['key'] = 'value'
+        shared_str.value = 'Hello, shared string!'
+
+    def process_function_1(self, shared_array):
+        for i in range(len(shared_array)):
+            shared_array[i] *= 2
+
+    def process_function_2(self, shared_list):
+        shared_list.extend([10, 20, 30])
+
+    def process_function_3(self, shared_dict):
+        shared_dict['new_key'] = {'nested_key': 'nested_value'}
+
+    def run(self):
+        with Manager() as manager:
+            num = Value('d', 0.0)
+            arr = Array('i', range(5))
+            lst = manager.list(range(5))
+            dct = manager.dict({'key': 'initial_value'})
+            string = manager.Value('c', b'initial_string')
+
+            p1 = Process(target=self.modify_shared_data, args=(num, lst, dct, string))
+            p2 = Process(target=self.process_function_1, args=(arr,))
+            p3 = Process(target=self.process_function_2, args=(lst,))
+            p4 = Process(target=self.process_function_3, args=(dct,))
+
+            p1.start()
+            p2.start()
+            p3.start()
+            p4.start()
+
+            p1.join()
+            p2.join()
+            p3.join()
+            p4.join()
+
+            print("Modified Number:", num.value)
+            print("Modified Array:", arr[:])
+            print("Modified List:", lst)
+            print("Modified Dictionary:", dct)
+            print("Modified String:", string.value)
+
+if __name__ == '__main__':
+    slam_instance = SLAM(config={})  # Pass your configuration as needed
+    slam_instance.run()
+
+```
+
