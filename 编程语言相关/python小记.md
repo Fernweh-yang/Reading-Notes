@@ -830,3 +830,74 @@ if __name__ == '__main__':
 
 ```
 
+# 9.with语句和上下文管理器ContextManager
+
+- 上下文管理器Context Managers是指
+
+  在一段代码执行之前执行一段代码，用于一些预处理工作，
+
+  执行之后再执行一段代码，用于一些清理工作。
+
+  - 使用场景：
+
+    1.打开文件进行读写，读写完之后需要将文件关闭。
+
+    2.在数据库操作中，操作之前需要连接数据库，操作之后需要关闭数据库。
+
+  - 如何实现：
+
+    在类里定义`__enter__()`和`__exit__()`两个函数
+
+- with语句
+
+  通过with来使用上下文管理器，确保在进入和退出代码块时执行必要的操作
+
+- 运行逻辑：
+
+  ```
+  with EXPR as VAR:
+      BLOCK
+  ```
+
+  1. 执行EXPR语句，获取上下文管理器（Context Manager）
+  2. 调用上下文管理器中的`__enter__`方法，该方法执行一些预处理工作。
+  3. 这里的`as VAR`可以省略，如果不省略，则将`__enter__`方法的返回值赋值给`VAR`。
+  4. 执行代码块BLOCK，这里的VAR可以当做普通变量使用。
+  5. 最后调用上下文管理器中的的`__exit__`方法。
+     - `__exit__`方法有三个参数：exc_type, exc_val, exc_tb。如果代码块BLOCK发生异常并退出，那么分别对应异常的type、value 和 traceback。否则三个参数全为None。
+     - `__exit__`方法的返回值可以为True或者False。如果为True，那么表示异常被忽视，相当于进行了try-except操作；如果为False，则该异常会被重新raise。
+
+- 用上下文管理器实现：打开文件操作
+
+  ```python
+  # 自定义打开文件操作
+  class MyOpen(object):
+  
+      def __init__(self, file_name):
+          """初始化方法"""
+          self.file_name = file_name
+          self.file_handler = None
+          return
+  
+      def __enter__(self):
+          """enter方法，返回file_handler"""
+          print("enter:", self.file_name)
+          self.file_handler = open(self.file_name, "r")
+          return self.file_handler
+  
+      def __exit__(self, exc_type, exc_val, exc_tb):
+          """exit方法，关闭文件并返回True"""
+          print("exit:", exc_type, exc_val, exc_tb)
+          if self.file_handler:
+              self.file_handler.close()
+          return True
+  
+  # 使用实例
+  with MyOpen("python_base.py") as file_in:
+      for line in file_in:
+          print(line)
+          raise ZeroDivisionError
+  # 代码块中主动引发一个除零异常，但整个程序不会引发异常
+  ```
+
+  
