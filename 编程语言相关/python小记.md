@@ -55,7 +55,13 @@
 
 - 下面以打包一个example_pkg项目为例子：
 
-## 1.1 创建项目文件
+## 安装python包的4种方式：
+
+使用 `setup.py`、`setup.cfg`、`pyproject.toml` 或 `requirements.txt` 文件，以及直接从源代码安装
+
+## 1. 用setup.py来安装
+
+### 1.1 创建项目文件
 
 ```python
 ├─packaging
@@ -72,7 +78,7 @@ name = "example_pkg"
 
 下面发布example_pkg这个包
 
-## 1.2 创建包文件
+### 1.2 创建包文件
 
 ```shell
 ├─packaging
@@ -86,7 +92,7 @@ name = "example_pkg"
 
 
 
-### 1.2.1 setup.py
+#### 1.2.1 setup.py
 
 `setup.py` 是的生成脚本 [setuptools](https://www.osgeo.cn/python-packaging/key_projects.html#setuptools) . 它告诉安装工具关于您的包（如名称和版本）以及要包括哪些代码文件。
 
@@ -125,7 +131,7 @@ setuptools.setup(
 - `packages` 是所有python的列表 [import packages](https://www.osgeo.cn/python-packaging/glossary.html#term-import-package) 应该包括在 [distribution package](https://www.osgeo.cn/python-packaging/glossary.html#term-distribution-package) . 我们可以使用 `find_packages()` 自动发现所有包和子包。这里example_pkg是唯一的包裹。
 - `classifiers` 给出索引和 [pip](https://www.osgeo.cn/python-packaging/key_projects.html#pip) 关于您的包的一些附加元数据。这里包只与python 3兼容，在MIT许可下获得许可，并且是独立于操作系统的。您应该始终至少包括您的包所使用的Python的哪个版本、包所使用的许可证以及包将使用的操作系统。有关分类器的完整列表，请参阅https://pypi.org/classifiers/。
 
-### 1.2.2 Readme.md
+#### 1.2.2 Readme.md
 
 1.2.1中提到的long_description:
 
@@ -134,7 +140,7 @@ setuptools.setup(
 This is a simple example package.
 ```
 
-### 1.2.3 LICENSE
+#### 1.2.3 LICENSE
 
 对于上传到python包索引的每个包来说，包含一个许可证是很重要的。这会告诉安装您的软件包的用户可以使用您的软件包的条款。有关选择许可证的帮助，请参阅https://choosealelicense.com/。选择许可证后，打开 `LICENSE` 并输入许可证文本。例如，如果您选择了MIT许可证：
 
@@ -162,7 +168,7 @@ SOFTWARE.
 
 
 
-## 1.3 得到分配包
+### 1.3 得到分配包
 
 为了得到包裹的[distribution packages](https://www.osgeo.cn/python-packaging/glossary.html#term-distribution-package) 
 
@@ -206,7 +212,7 @@ SOFTWARE.
 
    
 
-## 1.4 发布包
+### 1.4 发布包
 
 因为这里并不把这个测试包真的发出到[Python Package Index (PyPI)](https://www.osgeo.cn/python-packaging/glossary.html#term-python-package-index-pypi)，而是发出到[test.pypi.org](https://test.pypi.org/)。
 
@@ -240,7 +246,7 @@ SOFTWARE.
    https://test.pypi.org/project/example-pkg-yang-test/0.0.1/
    ```
 
-## 1.5 下载包
+### 1.5 下载包
 
 - 从TestPyPi上下载包
 
@@ -275,13 +281,13 @@ SOFTWARE.
   'example_pkg'
   ```
 
-## 1.6 本地卸载
+### 1.6 本地卸载
 
 ```shell
 pip uninstall example-pkg-yang-test	# 1.2.1中定义的包名
 ```
 
-## !!!如果不需要发布
+### 1.7 如果不需要发布
 
 可以直接创建setup后安装
 
@@ -302,9 +308,14 @@ pip uninstall example-pkg-yang-test	# 1.2.1中定义的包名
    (.env) PS C:\Users\51212\Desktop\testeverything\testpkg> pip install -e .
    ```
 
-   
 
 
+
+## 2. 用pyproject.toml来安装
+
+pyproject.toml是在 PEP 518（Specifying Minimum Build System Requirements for Python Projects）中定义的，于 2020 年 11 月发布，该 PEP 于 Python 3.7 版本中引入。
+
+主要用于管理构建依赖、版本控制、文档等。
 
 # 2. 数据操作
 
