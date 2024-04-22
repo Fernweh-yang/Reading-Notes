@@ -75,7 +75,7 @@ $$
 | \oplus | $\oplus$ | \odot | $\odot$ |
 | \curlywedge | $\curlywedge$ | \curlyvee | $\curlyvee$ |
 | \circledcirc | $\circledcirc$ | \Phi | $\Phi$ |
-|  |  |  |  |
+| \varpi | $\varpi$ |  |  |
 |  |  |  |  |
 |  |  |  |  |
 
