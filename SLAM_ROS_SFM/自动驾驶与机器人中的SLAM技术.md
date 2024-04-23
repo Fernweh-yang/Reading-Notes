@@ -256,7 +256,7 @@ $$
      \dot{q}=q\varpi\tag{2.2.7}
      $$
   
-  4. 2.2.7式就和2.1.1式一样是一个微分方程，解的：
+  4. 2.2.7式就和2.1.1式一样是一个微分方程，解得 ：
      $$
      q(t)=q(t_0)exp(\varpi\Delta t)\tag{2.2.8}
      $$
@@ -264,11 +264,128 @@ $$
 
 ### 2.3 四元数的李代数与旋转向量间的转换
 
-### 2.4 so(3), se(3)上的运动学
+14讲中已知旋转矩阵$R$的李代数是旋转向量$\phi$
+
+- 通过和旋转矩阵$R$的比较，可以得到四元数的李代数:纯虚四元数$ \varpi=[0,\omega]^T\in\mathcal{Q}$ 和  旋转向量$\phi$ 之间的关系：
+  $$
+  \varpi=[0,\frac{1}{2}\phi]^T, 即 \omega=\frac{1}{2}\phi\tag{2.2.9}
+  $$
+  可以发现四元数表达式的角速度: $\omega$ 正好是$R$的李代数: $\phi$​ 的一半。这与四元数在旋转一个向量时要乘两遍相对应。
+
+- 旋转向量和它的李代数（旋转向量$\phi$）之间的关系：
+
+  注意这里$\phi$式旋转向量，所以R是右乘
+
+  2.1.1式$\omega$是瞬时角速度，所以R是左乘
+  $$
+  \dot{R}=\phi^{\wedge}R\tag{2.2.10}
+  $$
+  指数映射为:
+  $$
+  R=Exp(\phi)=exp(\phi^{\wedge})\tag{2.2.11}
+  $$
+  
+
+- 四元数和旋转向量的李代数之间的关系：
+
+  由2.2.9已知四元数李代数和旋转向量李代数之间的关系，所以得到：
+  $$
+  \dot{q}=\frac{1}{2}q[0,\phi]^T=q[0,\omega]^T=q\varpi \tag{2.2.12}
+  $$
+  指数映射为:
+  $$
+  q=Exp(\varpi)=exp([0,\frac{1}{2}\phi]^T)\tag{2.2.13}
+  $$
+
+- 
+
+### 2.4 加上平移的李群运动学
+
+旋转：即2.1.1式，$\omega$是三维瞬时角速度
+$$
+\mathbf{\dot{R}}=\mathbf{R}\mathbf{\omega}^{\wedge}
+$$
+平移：
+$$
+\dot{t}=v
+$$
+
+> 四元数的运动学,即2.2.7式: $\dot{q}=q\varpi$
 
 ### 2.5 线速度与加速度
 
+研究**同一**坐标点在只带旋转关系的两个坐标系之间的线速度和加速度的变换关系。
+
+1. 考虑p点在两坐标系下的坐标为$p_1,p_2$，他们的关系为
+   $$
+   p_1=R_{12}p_2 \tag{2.5.1}
+   $$
+
+2. 对2.5.1求时间导数
+   $$
+   \begin{aligned}
+   \dot{p}_1& =\dot{R}_{12}p_{2}+R_{12}\dot{p}_{2} \\
+   &=R_{12}\omega^{\wedge}p_{2}+R_{12}\dot{p}_{2} \\
+   &=R_{12}\left(\omega^{\wedge}p_{2}+\dot{p}_{2}\right)
+   \end{aligned} \tag{2.5.2}
+   $$
+
+3. $\dot{p}$代换为速度v:
+   $$
+   v_{1}=R_{12}\left(\omega^{\wedge}p_{2}+v_{2}\right) \tag{2.5.3}
+   $$
+
+4. 继续对2.5.3q求时间导数：
+   $$
+   \begin{aligned}
+   \dot{v}_1& =\dot{R}_{12}\left(\omega^{\wedge}p_{2}+v_{2}\right)+R_{12}\left(\dot{\omega}^{\wedge}p_{2}+\omega^{\wedge}\dot{p}_{2}+\dot{v}_{2}\right) \\
+   &=R_{12}\left(\omega^{\wedge}\omega^{\wedge}p_{2}+\omega^{\wedge}v_{2}+\dot{\omega}^{\wedge}p_{2}+\omega^{\wedge}\dot{p}_{2}+\dot{v}_{2}\right) \\
+   &=R_{12}(\dot{v}_2+2\omega^{\wedge}v_2+\dot{w}^{\wedge}p_2+\omega^{\wedge}\omega^{\wedge}p_2)
+   \end{aligned}\tag{2.5.4}
+   $$
+
+5. $\dot{v}$代换为加速度$a$:
+   $$
+   a_{1}=R_{12}\left(\underbrace{a_{2}}_{\text{加速度}}+\underbrace{2\omega^{\wedge}v_{2}}_{\text{科氏加速度}}+\underbrace{\dot{\omega}^{\wedge}p_{2}}_{\text{角加速度}}+\underbrace{\omega^{\wedge}\omega^{\wedge}p_{2}}_{\text{向心加速度}}\right)\tag{2.5.5}
+   $$
+
+6. 
+
 ### 2.6 扰动模型与雅可比矩阵
+
+对李群求导，可以定义在向量层面即通过李代数，也可以通过BCH公式得到的扰动模型，扰动模型会更简洁明了。
+
+下面看如何求导
+
+- 案例1：对向量$a$进行旋转
+
+  这个旋转可以是旋转矩阵$Ra$，也可以是四元数$qaq^*$，最后得到的结果是一致的：
+  $$
+  \frac{\part Ra}{\part \phi}=\frac{\part qaq^*}{\part \omega}=-Ra^{\wedge}\tag{2.6.1}
+  $$
+
+- 案例2：旋转的复合
+
+  考虑$Log(R_1R_2)$对$R_1$求导的结果，对$R_1$进行右扰动可计算得到
+  $$
+  \begin{aligned}
+  \frac{\partial Log\left(R_{1}R_{2}\right)}{\partial R_{1}}& =\lim_{\phi\to0}\frac{Log\left(R_{1}Exp\left(\phi\right)R_{2}\right)-Log\left(R_{1}R_{2}\right)}{\phi} \\
+  &=\lim_{\phi\to0}\frac{Log\left(R_{1}R_{2}Exp\left(R_{2}^{\top}\phi\right)\right)-Log\left(R_{1}R_{2}\right)}{\phi} \\
+  &=J_{r}^{-1}\left(Log\left(R_{1}R_{2}\right)\right)R_{2}^{T}
+  \end{aligned} \tag{2.6.2}
+  $$
+
+  > 之所以有Log是因为矩阵无法对向量求导，所以统一转为向量
+
+  如果对$R_2$求导，右扰动计算可得
+  $$
+  \begin{aligned}
+  \frac{\partial Log\left(R_{1}R_{2}\right)}{\partial R_{2}}
+  &=\lim_{\phi\to0}\frac{Log\left(R_{1}R_{2}Exp\left(\phi\right)\right)-Log\left(R_{1}R_{2}\right)}{\phi} \\
+  &=J_{r}^{-1}\left(Log\left(R_{1}R_{2}\right)\right)
+  \end{aligned} \tag{2.6.3}
+  $$
+  
 
 ## 3. 案例：运动学(圆周运动)
 
