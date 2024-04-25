@@ -5911,13 +5911,15 @@ target_link_libraries(direct_method ${OpenCV_LIBS} ${Pangolin_LIBRARIES} fmt::fm
 
 - 卡尔曼滤波由**5个方程+2个阶段**组成，并用$\hat{a}$表示后验，$\check{a}$表示先验分布：
 
+  先验即预测值，后验即上一轮计算得到的值。
+
   1. **预测**(prediction)
 
      从上一时刻的状态，根据输入信息（有噪声）推断当前时刻的状态分布。6.1式预测状态估计, 6.2式预测先验状态误差协方差
      $$
      \begin{align}
      \check{\mathbf{x}}_k=\mathbf{A}_k\hat{\mathbf{x}}_{k-1}+\mathbf{u}_k \tag{6.1}\\
-     \check{\mathbf{P}}_k=\mathbf{A}_k\hat{\mathbf{P}}_{k-1}\mathbf{A}_k^T+\mathbf{R} \tag{6.2}
+     \check{\mathbf{P}}_k=\mathbf{A}_k\hat{\mathbf{P}}_{k-1}\mathbf{A}_k^T+\mathbf{R}_k \tag{6.2}
      \end{align}
      $$
 
@@ -5954,28 +5956,28 @@ target_link_libraries(direct_method ${OpenCV_LIBS} ${Pangolin_LIBRARIES} fmt::fm
      > 0 \\
      > \end{array}\right]+\mathbf{w}_k
      > $$
-  
+
      > 先验状态协方差$\check{\mathbf{P}}_k$是什么？
      >
      > 是真实状态$\mathbf{x}_k$和状态估计$\check{\mathbf{x}}_k$之间的先验误差协方差
      > $$
      > \check{\mathbf{P}}_k=E[(\mathbf{x}_k-\check{\mathbf{x}}_k)(\mathbf{x}_k-\check{\mathbf{x}}_k)^T]
      > $$
-  
+
   2. **更新**（correctiion/measurment update）
-  
+
      比较在当前时刻的状态输入（也叫**测量**值）和**预测**的状态变量， 从而对预测出的系统状态进行修正.
-  
+
      - 先计算卡尔曼增益K：
        $$
-       \mathbf{K}=\check{\mathbf{P}}_k\mathbf{C}_k^T(\mathbf{C}_k\check{\mathbf{P}}_k\mathbf{C}_k^T+\mathbf{Q}_k)^{-1}\tag{7}
+       \mathbf{K}_k=\check{\mathbf{P}}_k\mathbf{C}_k^T(\mathbf{C}_k\check{\mathbf{P}}_k\mathbf{C}_k^T+\mathbf{Q}_k)^{-1}\tag{7}
        $$
-  
+
      - 然后计算后验概率分布, 8.1式更新状态，8.2式更新后验误差协方差
        $$
        \begin{align}
-       \hat{\mathbf{x}}_k=\check{\mathbf{x}}_k+\mathbf{K}(\mathbf{z}_k-\mathbf{C}_k\check{\mathbf{x}}_k)\tag{8.1}\\
-       \hat{\mathbf{P}}_k=(\mathbf{I}-\mathbf{KC}_k)\check{\mathbf{P}}_k \tag{8.2}
+       \hat{\mathbf{x}}_k=\check{\mathbf{x}}_k+\mathbf{K}_k(\mathbf{z}_k-\mathbf{C}_k\check{\mathbf{x}}_k)\tag{8.1}\\
+       \hat{\mathbf{P}}_k=(\mathbf{I}-\mathbf{K}_k\mathbf{C}_k)\check{\mathbf{P}}_k \tag{8.2}
        \end{align}
        $$
 
@@ -6004,20 +6006,20 @@ target_link_libraries(direct_method ${OpenCV_LIBS} ${Pangolin_LIBRARIES} fmt::fm
   1. **预测**：
      $$
      \check{\mathbf{x}}_k=f(\hat{\mathbf{x}}_{k-1},\mathbf{u}_k)\\
-     \check{\mathbf{P}}_k=\mathbf{F}\hat{\mathbf{P}}_{k-1}\mathbf{F}^T+\mathbf{R}_k \tag{9}
+     \check{\mathbf{P}}_k=\mathbf{F}_k\hat{\mathbf{P}}_{k-1}\mathbf{F}_k^T+\mathbf{R}_k \tag{9}
      $$
 
   2. **更新**：
 
      - 先计算卡尔曼增益$K_k$
        $$
-       \mathbf{K}_k=\check{\mathbf{P}}_k\mathbf{H}^T(\mathbf{H}\check{\mathbf{P}}_k\mathbf{H}^T+\mathbf{Q}_k)^{-1}\tag{10}
+       \mathbf{K}_k=\check{\mathbf{P}}_k\mathbf{H}_k^T(\mathbf{H}_k\check{\mathbf{P}}_k\mathbf{H}_k^T+\mathbf{Q}_k)^{-1}\tag{10}
        $$
 
      - 然后计算后验概率分布：
        $$
        \hat{\mathbf{x}}_k=\check{\mathbf{x}}_k+\mathbf{K}_k(\mathbf{z}_k-h(\check{\mathbf{x}}_k))\\
-       \hat{\mathbf{P}}_k=(\mathbf{I}-\mathbf{K}_k\mathbf{H})\check{\mathbf{P}}_k \tag{11}
+       \hat{\mathbf{P}}_k=(\mathbf{I}-\mathbf{K}_k\mathbf{H}_k)\check{\mathbf{P}}_k \tag{11}
        $$
        
 
