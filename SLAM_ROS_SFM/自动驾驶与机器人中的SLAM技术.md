@@ -285,7 +285,6 @@ $$
   R=Exp(\phi)=exp(\phi^{\wedge})\tag{2.2.11}
   $$
   
-
 - 四元数和旋转向量的李代数之间的关系：
 
   由2.2.9已知四元数李代数和旋转向量李代数之间的关系，所以得到：
@@ -349,8 +348,6 @@ $$
    a_{1}=R_{12}\left(\underbrace{a_{2}}_{\text{加速度}}+\underbrace{2\omega^{\wedge}v_{2}}_{\text{科氏加速度}}+\underbrace{\dot{\omega}^{\wedge}p_{2}}_{\text{角加速度}}+\underbrace{\omega^{\wedge}\omega^{\wedge}p_{2}}_{\text{向心加速度}}\right)\tag{2.5.5}
    $$
 
-6. 
-
 ### 2.6 扰动模型与雅可比矩阵
 
 对李群求导，可以定义在向量层面即通过李代数，也可以通过BCH公式得到的扰动模型，扰动模型会更简洁明了。
@@ -390,3 +387,210 @@ $$
 ## 3. 案例：运动学(圆周运动)
 
 ## 4. 滤波器与最优化理论
+
+### 4.1 状态估计问题
+
+SLAM问题、定位问题或者建图问题都可以概括为状态估计问题。状态估计由一组运动方程和一组观测方程组成，假设观测方程$h$和运动方程$f$为线性的，那么就可以得到线性高斯系统：
+$$
+\begin{cases}
+\mathbf{x}_k=\mathbf{A}_k\mathbf{x}_{k-1}+\mathbf{u}_k+\mathbf{w}_k \\
+\mathbf{z}_k = \mathbf{C}_k\mathbf{x}_k+\mathbf{v}_k \\
+\end{cases}\ \ \ k=1,\cdots,N\tag{4.1.1}
+$$
+它的噪声服从零均值高斯分布：
+$$
+\mathbf{w}_k \sim N(\mathbf{0},\mathbf{R}),\ \mathbf{v}_k\sim N(\mathbf{0},\mathbf{Q}) \tag{4.1.2}
+$$
+$\mathbf{A}_k$：状态转移矩阵
+
+$\mathbf{u}_k$：控制向量
+
+$\mathbf{C}_k$：观测矩阵，将状态空间映射到观测空间
+
+$\mathbf{R}$：过程噪声的协方差矩阵 
+
+$\mathbf{Q}$：测量误差的协方差矩阵
+
+### 4.2 卡尔曼滤波器
+
+- 下面使用卡尔曼滤波器将k-1时刻的状态分布推导至k时刻，最终得到线性系统的最优无偏估计
+
+  - 由于基于马尔可夫性假设，所以在实际编程中，我们只需要维护一个状态变量
+  - 而又由于状态变量服从高斯分布，我们只需要维护状态变量的均值矩阵$\hat{\mathbf{x}}_k$和协方差矩阵$\hat{\mathbf{P}}_k$
+
+- 卡尔曼滤波由**5个方程+2个阶段**组成，并用$\hat{a}$表示后验，$\check{a}$表示先验分布：
+
+  先验即预测值，后验即上一轮计算得到的值。
+
+  1. **预测**(prediction)
+
+     从上一时刻的状态，根据输入信息（有噪声）推断当前时刻的状态分布。4.1.3式预测状态估计, 4.1.4式预测先验状态误差协方差
+     $$
+     \begin{align}
+     \check{\mathbf{x}}_k=\mathbf{A}_k\hat{\mathbf{x}}_{k-1}+\mathbf{u}_k \tag{4.1.3}\\
+     \check{\mathbf{P}}_k=\mathbf{A}_k\hat{\mathbf{P}}_{k-1}\mathbf{A}_k^T+\mathbf{R}_k \tag{4.1.4}
+     \end{align}
+     $$
+
+     > 状态$\mathbf{x}_k$举例来说：
+     >
+     > 现在对小车一维直线行进距离p和速度v的估计：
+     >
+     > 可将其观察状态:
+     > $$
+     > \mathbf{x}_k=\left [\begin{array}{cccc}
+     > p_k\\
+     > v_k \\
+     > \end{array}\right]=\left [\begin{array}{cccc}
+     > p_{k-1}+v_{k-1}\Delta t+\frac{1}{2}a_k\Delta t^2\\
+     > v_{k-1}+a_k\Delta t \\
+     > \end{array}\right]
+     > $$
+     > 写成状态方程, 6.1式：
+     > $$
+     > \mathbf{x}_k=\left [\begin{array}{cccc}
+     > p_k\\
+     > v_k \\
+     > \end{array}\right]=\left [\begin{array}{cccc}
+     > 1 & \Delta t\\
+     > 0 & 1 \\
+     > \end{array}\right]\left [\begin{array}{cccc}
+     > p_{k-1}\\
+     > v_{k-1} \\
+     > \end{array}\right]+\left [\begin{array}{cccc}
+     > \frac{1}{2}\Delta t^2 & 0\\
+     > \Delta t & 0 \\
+     > \end{array}\right]\left [\begin{array}{cccc}
+     > a_k\\
+     > 0 \\
+     > \end{array}\right]+\mathbf{w}_k
+     > $$
+
+     > 先验状态协方差$\check{\mathbf{P}}_k$是什么？
+     >
+     > 是真实状态$\mathbf{x}_k$和状态估计$\check{\mathbf{x}}_k$之间的先验误差协方差
+     > $$
+     > \check{\mathbf{P}}_k=E[(\mathbf{x}_k-\check{\mathbf{x}}_k)(\mathbf{x}_k-\check{\mathbf{x}}_k)^T]
+     > $$
+
+  2. **更新**（correctiion/measurment update）
+
+     比较在当前时刻的状态输入（也叫**测量**值）和**预测**的状态变量， 从而对预测出的系统状态进行修正.
+
+     - 先计算卡尔曼增益K：
+       $$
+       \mathbf{K}_k=\check{\mathbf{P}}_k\mathbf{C}_k^T(\mathbf{C}_k\check{\mathbf{P}}_k\mathbf{C}_k^T+\mathbf{Q}_k)^{-1}\tag{4.1.5}
+       $$
+
+     - 然后计算后验概率分布, 8.1式更新状态，8.2式更新后验误差协方差
+       $$
+       \begin{align}
+       \hat{\mathbf{x}}_k=\check{\mathbf{x}}_k+\mathbf{K}_k(\mathbf{z}_k-\mathbf{C}_k\check{\mathbf{x}}_k)\tag{4.1.6}\\
+       \hat{\mathbf{P}}_k=(\mathbf{I}-\mathbf{K}_k\mathbf{C}_k)\check{\mathbf{P}}_k \tag{4.1.7}
+       \end{align}
+       $$
+
+- 5个方程的物理意义
+
+  - 4.1.3式：状态方程，通过它直接可以根据前一个状态估计一下当前状态。
+
+  - 4.1.4式：先验误差协方差方程，通过它可以看到由状态方程预测的状态和真实状态之间的方差（不确定性，可靠性）有多少
+
+  - 4.1.5式：约束优化条件，使后验误差协方差$\hat{\mathbf{P}}_k$最小，得到卡尔曼增益K
+
+  - 4.1.6式：状态更新，得到**我们想要的最佳状态估计**
+
+    通过该式可以发现，Kalman滤波就是一个加权平均的过程：
+
+    对态估计和测量估计的加权平均：哪个估计的不确定性低(更可靠)哪个的权重就大，这个权重在8.1式的体现就是卡尔曼增益K。
+
+  - 4.1.7式：后验误差协方差方程$\hat{\mathbf{P}}_k$，在先验误差协方差方程$\check{\mathbf{P}}_k$的基础上加入测量过程$\mathbf{C}_k$的影响，更新下一时刻的先验值$\check{\mathbf{P}}_{k+1}$
+
+### 4.3 扩展卡尔曼滤波器
+
+在SLAM中运动/观测方程通常都是非线性的，而卡尔曼滤波KF只能用于线性系统，对于非线性系统需要使用先在某点附近对运动/观测方程进行一阶泰勒展开，保留一阶项以近似成线性发成，最后使用扩展卡尔曼滤波EKF进行无偏最优估计
+
+- 扩展卡尔曼滤波EKF同样由2部分组成
+
+  1. **预测**：
+     $$
+     \check{\mathbf{x}}_k=f(\hat{\mathbf{x}}_{k-1},\mathbf{u}_k)\\
+     \check{\mathbf{P}}_k=\mathbf{F}_k\hat{\mathbf{P}}_{k-1}\mathbf{F}_k^T+\mathbf{R}_k \tag{4.1.8}
+     $$
+
+  2. **更新**：
+
+     - 先计算卡尔曼增益$K_k$
+       $$
+       \mathbf{K}_k=\check{\mathbf{P}}_k\mathbf{H}_k^T(\mathbf{H}_k\check{\mathbf{P}}_k\mathbf{H}_k^T+\mathbf{Q}_k)^{-1}\tag{4.1.9}
+       $$
+
+     - 然后计算后验概率分布：
+       $$
+       \hat{\mathbf{x}}_k=\check{\mathbf{x}}_k+\mathbf{K}_k(\mathbf{z}_k-h(\check{\mathbf{x}}_k))\\
+       \hat{\mathbf{P}}_k=(\mathbf{I}-\mathbf{K}_k\mathbf{H}_k)\check{\mathbf{P}}_k \tag{4.1.10}
+       $$
+
+### 4.4 最优化与滤波器的关系
+
+- 从批量最小二乘法(Batch Least Square)的视角来看，运动方程和观测方程都可以看成一个状态变量x与运动学输入、观测值之间的残差：
+  $$
+  \begin{align}
+  e_{motion}&=x_k-f(x_{k-1},u)\sim\mathcal{N}(0,R_k)\tag{4.1.11}\\
+  e_{obs}&=z_k-h(x_k)\sim\mathcal{N}(0,Q_k)\tag{4.1.12}
+  \end{align}
+  $$
+  而滤波器中的最优状态估计可以看成关于各误差项的最小二乘问题：
+  $$
+  x^{*}=arg\mathop{min}_x\sum_k(e_k^T\Omega_k^{-1}e_k)\tag{4.1.13}
+  $$
+
+  - $e_k$：第k项误差
+  - $\Omega$：该误差的协方差矩阵
+
+- 最优化方法和滤波器的关联
+
+  他们再线性系统中会得到同样的结果，但再非线性系统中由于以下原因会不同：
+
+  1. 最优化有迭代过程，而ekf没有。
+  2. 迭代过程会不断在新的线性化点$x_i$上求取雅可比矩阵，而EKF的雅可比矩阵只在预测位置上求取一次。
+  3. EKF还会区分先验变量和后验变量，分开处理预测过程和观测过程。而最优化方法则是统一处理各处的状态变量。
+
+  忽略第三点原因，将卡尔曼滤波看作非线性优化的化会有2个优化变量$x_{k-1}$和$x_k$和3种误差函数：
+
+  1. 先验误差：
+
+     k-1时刻的状态$x_{k-1}$服从它的的先验高斯分布。假设$x_{k-1}\sim\mathcal{N}(\hat{x}_{k-1},P_{k-1})$，则先验误差为：
+     $$
+     e_{prior}=x_{k-1}-\hat{x}_{k-1}\sim\mathcal{N}(0,P_{k-1})\tag{4.1.14}
+     $$
+
+  2. 从k-1到k的运动误差，即4.1.11式
+  3. k时刻的观测误差，即4.1.12式
+
+# 三、惯性导航与组合导航
+
+探讨惯性测量单元(IMU, inertial motion unit)的测量模型、噪声模型。和卫星定位。
+
+## 1. IMU系统的运动学
+
+> IMU通常由陀螺仪(Gyroscope)和加速度计(Accelerator)组成。我们可以通过IMU测量运动载体的惯性来推断物体本身的状态。
+>
+> 陀螺仪可以测量物体的角速度。
+>
+> 加速度计可以测量物体的加速度。
+
+IMU的测量值$\widetilde{a},\widetilde{\omega}$就是车辆在车坐标系下的加速度和车自身的角速度：
+$$
+\widetilde{a}=R^T(a-g)\\
+\widetilde{\omega}=\omega
+$$
+这里的$R^T=R^{-1}$加上下标是$R_{bw}$，将世界坐标系下的物理量转换到车坐标系下；g是重力加速度
+
+## 2. 用IMU进行轨迹推算
+
+## 3. 卫星导航
+
+## 4. 使用误差状态卡尔曼滤波器实现组合导航
+
+## 5. 案例：实现ESKF的组合导航

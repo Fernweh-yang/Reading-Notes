@@ -5888,7 +5888,7 @@ target_link_libraries(direct_method ${OpenCV_LIBS} ${Pangolin_LIBRARIES} fmt::fm
   \begin{cases}
   \mathbf{x}_k=\mathbf{A}_k\mathbf{x}_{k-1}+\mathbf{u}_k+\mathbf{w}_k \\
   \mathbf{z}_k = \mathbf{C}_k\mathbf{x}_k+\mathbf{v}_k \\
-  \end{cases}\ \ \ k=1,\cdots,N\tag{4}它的噪声服从零均值高斯分布：
+  \end{cases}\ \ \ k=1,\cdots,N\tag{4}
   $$
   它的噪声服从零均值高斯分布：
   $$
