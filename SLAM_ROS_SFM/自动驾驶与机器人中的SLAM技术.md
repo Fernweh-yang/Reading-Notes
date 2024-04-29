@@ -11,6 +11,78 @@
 
   额外的有课后作业答案和修改代码
 
+## 1. 全代码编译
+
+1. [GIT仓库](https://github.com/Fernweh-yang/LiDAR-SLAM-code-comments)下载源码
+
+2. 安装ros noetic
+
+3. 安装库
+
+   ```
+   sudo apt install -y ros-noetic-pcl-ros ros-noetic-velodyne-msgs libopencv-dev libgoogle-glog-dev libeigen3-dev libsuitesparse-dev libpcl-dev libyaml-cpp-dev libbtbb-dev libgmock-dev
+   ```
+
+4. 安装[Pangolin](https://github.com/stevenlovegrove/Pangolin)，可参考安装软件参考
+
+5. 安装thirdparty/g2o
+
+6. 最后在总的文件夹下用如下命令安装所有的代码
+
+   ```
+   mkdir build
+   cd build
+   cmake ..
+   make -j4
+   ```
+
+## 2. 单独编译
+
+## 3. Vscode
+
+需要在`c_cpp_properties.json`中加入
+
+```json
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "/usr/include/eigen3",
+                "/usr/include/opencv4",
+                "/opt/ros/noetic/include",
+                "/usr/include/pcl-1.10"
+            ],
+            "defines": [],
+            "compilerPath": "/usr/bin/gcc",
+            "cStandard": "c17",
+            "cppStandard": "gnu++14",
+            "intelliSenseMode": "linux-gcc-x64"
+        }
+    ],
+    "version": 4
+}
+
+```
+
+## 4. gflags和glog
+
+本书中用gflags作为参数管理工具，glog作为日志管理工具。
+
+### 4.1 gflags
+
+gflags是谷歌开发的一个处理命令行参数的c++库，不直接用argv而用gflags原因有：
+
+1. **类型安全和易用性**：`gflags` 允许开发者为不同的参数定义不同的类型，如整数、浮点数、布尔值等，而直接使用 `argv` 需要手动进行类型转换，容易出错并且不够直观。
+2. **自动生成帮助文档**：`gflags` 可以自动生成命令行帮助文档，其中包含了每个命令行参数的描述、默认值等信息，使得用户能够更容易地了解程序的功能和如何使用它。而使用 `argv` 则需要手动编写帮助文档，增加了开发和维护的工作量。
+3. **可扩展性**：`gflags` 具有很好的可扩展性，可以轻松地添加新的命令行参数，并且支持各种自定义选项，如参数验证、参数组织等。这使得开发者能够更灵活地定义和管理命令行参数。
+4. **与日志库的集成**：`gflags` 与 Google 提供的日志库 `glog` 集成良好，可以方便地将命令行参数与日志记录结合起来，从而更好地管理程序的配置和输出。
+
+### 4.2 glog
+
+`glog` 是 Google 提供的一个 C++ 日志记录库，用于在 C++ 程序中记录日志消息。
+
 # 一、自动驾驶概念
 
 - 自动驾驶应具备的能力
@@ -186,15 +258,21 @@ $$
      $$
      \mathbf{\dot{R}}=\mathbf{R}\mathbf{\omega}^{\wedge} \tag{2.1.1}
      $$
-     这里的$\omega$的物理意义是瞬时角速度
+     这里的$\omega$的物理意义是瞬时角速度。
+     
+     >  如果对$RR^T=I$求导会得到：
+     > $$
+     > \dot{R}=\phi^{\wedge}R
+     > $$
+     > $\phi$的意义是SO(3)的李代数，也是R所对应的旋转向量
 
-- 解泊松方程后可得**处理角速度**的2.2, 2.3, 2.4式：
+- 解泊松方程后可得**处理角速度**的2.1.2, 2.1.3, 2.1.4式：
 
-  给定初值$t_0$时刻的旋转矩阵为$\mathbf{R}(t_0)$，那么微分方程2.1式的解为：
+  给定初值$t_0$时刻的旋转矩阵为$\mathbf{R}(t_0)$，那么微分方程2.1.1式的解为：
   $$
   \mathbf{R}(t)=\mathbf{R}(t_0)exp(\omega^{\wedge}(t-t_0))\tag{2.1.2}
   $$
-  记$\Delta t=t-t_0$则可得到2.2式的离散时间下的格式：
+  记$\Delta t=t-t_0$则可得到2.1.2式的离散时间下的格式：
   $$
   \mathbf{R}(t)=\mathbf{R}(t_0)exp(\omega\Delta t) \tag{2.1.3}
   $$
@@ -202,8 +280,10 @@ $$
   $$
   \mathbf{R}(t_0+\Delta t)\approx\mathbf{R}(t_0)(\mathbf{I}+\omega^{\wedge}\Delta t)\tag{2.1.4}
   $$
+  
+- 
 
-​	可以发现：2.3式是2.2式的在离散时间下的形式；2.4式又是2.3式的线性近似形式
+​	可以发现：2.1.3式是2.1.2式的在离散时间下的形式；2.1.4式又是2.1.3式的线性近似形式
 
 ### 2.2 四元数视角下的运动学
 
@@ -262,41 +342,55 @@ $$
      $$
   
 
-### 2.3 四元数的李代数与旋转向量间的转换
+### 2.3 四元数的李代数与旋转向量$\phi$，角速度$\omega$间的转换
 
 14讲中已知旋转矩阵$R$的李代数是旋转向量$\phi$
 
-- 通过和旋转矩阵$R$的比较，可以得到四元数的李代数:纯虚四元数$ \varpi=[0,\omega]^T\in\mathcal{Q}$ 和  旋转向量$\phi$ 之间的关系：
+- 四元数的李代数与旋转向量$\phi$的关系
+  
+  通过和旋转矩阵$R$的比较，可以得到四元数的李代数:纯虚四元数$ \varpi=[0,\omega]^T\in\mathcal{Q}$ 和  旋转向量$\phi$ 之间的关系：
   $$
   \varpi=[0,\frac{1}{2}\phi]^T, 即 \omega=\frac{1}{2}\phi\tag{2.2.9}
   $$
   可以发现四元数表达式的角速度: $\omega$ 正好是$R$的李代数: $\phi$​ 的一半。这与四元数在旋转一个向量时要乘两遍相对应。
+  
+- 旋转向量和角速度之间的关系：
 
-- 旋转向量和它的李代数（旋转向量$\phi$）之间的关系：
-
-  注意这里$\phi$式旋转向量，所以R是右乘
-
-  2.1.1式$\omega$是瞬时角速度，所以R是左乘
+  在2.1.1中得到
   $$
-  \dot{R}=\phi^{\wedge}R\tag{2.2.10}
+  \mathbf{\dot{R}}=\mathbf{R}\mathbf{\omega}^{\wedge} \tag{2.1.1}
   $$
-  指数映射为:
+  SO3指数映射为:
   $$
-  R=Exp(\phi)=exp(\phi^{\wedge})\tag{2.2.11}
+  R=Exp(\omega)=exp(\omega^{\wedge})\tag{2.2.10}
+  $$
+  最终SO3的旋转更新式为2.1.3式：
+  $$
+  \mathbf{R}(t)=\mathbf{R}(t-1)exp(\omega\Delta t) \tag{2.1.3}
   $$
   
-- 四元数和旋转向量的李代数之间的关系：
+  
+- 四元数和角速度之间的关系：
 
-  由2.2.9已知四元数李代数和旋转向量李代数之间的关系，所以得到：
+  为了和2.1.1中SO(3)的角速度定义一致，所以2.2.11式这里要乘0.5
   $$
-  \dot{q}=\frac{1}{2}q[0,\phi]^T=q[0,\omega]^T=q\varpi \tag{2.2.12}
+  \dot{q}=\frac{1}{2}q[0,\omega]^T=\frac{1}{2}q(2\varpi) \tag{2.2.11}
   $$
-  指数映射为:
+  四元数指数映射为:
   $$
-  q=Exp(\varpi)=exp([0,\frac{1}{2}\phi]^T)\tag{2.2.13}
+  q=Exp(\omega)=exp([0,\frac{1}{2}\omega]^T)\tag{2.2.12}
+  $$
+  最终四元数的旋转更新式为
+  $$
+  \begin{align}
+  q(t)&=qExp(\omega)\approx q(t-1)_{unit}[1,\frac{1}{2}\omega\Delta t]\\ \tag{2.2.13}
+  &= q(t-1)_{unit}[1,\frac{1}{2}\omega_xdt,\frac{1}{2}\omega_ydt,\frac{1}{2}\omega_zdt]
+  \end{align}
   $$
 
-- 
+  > $q(t-1)_{unit}$是指取上一时刻q的单位四元数，即$\frac{q}{||q||}$
+  >
+  > $\omega_x$是绕x轴的角速度
 
 ### 2.4 加上平移的李群运动学
 
@@ -385,6 +479,71 @@ $$
   
 
 ## 3. 案例：运动学(圆周运动)
+
+展现了四元数下的旋转更新(2.2.13)和SO3下的旋转更新(2.1.3)
+
+```c++
+/// 本节程序演示一个正在作圆周运动的车辆
+#include <gflags/gflags.h>  // 程序参数管理工具
+#include <glog/logging.h>   // 日志管理工具
+
+#include "common/eigen_types.h"
+#include "common/math_utils.h"
+#include "tools/ui/pangolin_window.h"
+
+/// 车辆的角速度与线速度可以在flags中设置
+// 定义命令行参数
+DEFINE_double(angular_velocity, 10.0, "角速度（角度）制");
+DEFINE_double(linear_velocity, 5.0, "车辆前进线速度 m/s");
+DEFINE_bool(use_quaternion, false, "是否使用四元数计算");
+
+int main(int argc, char** argv) {
+    google::InitGoogleLogging(argv[0]);                 // 初始化日志类，argv[0]是程序的名称
+    FLAGS_stderrthreshold = google::INFO;               // 设置了 glog 输出到标准错误流的最低日志级别为 INFO。这意味着只有 INFO 级别及以上的日志消息才会被输出到标准错误流。
+    FLAGS_colorlogtostderr = true;                      // 在输出到标准错误流时否启用彩色日志。
+    google::ParseCommandLineFlags(&argc, &argv, true);  // 解析命令行参数并初始化相应的 gflags 变量, true参数表示如果有不符合规范的参数打印出错误信息。
+
+    /// 可视化
+    // 使用tools中的pangolin_window
+    sad::ui::PangolinWindow ui;
+    if (ui.Init() == false) {
+        return -1;
+    }
+
+    double angular_velocity_rad = FLAGS_angular_velocity * sad::math::kDEG2RAD;  // 弧度制角速度
+    SE3 pose;                                                                    // TWB表示的位姿
+    Vec3d omega(0, 0, angular_velocity_rad);                                     // 角速度矢量
+    Vec3d v_body(FLAGS_linear_velocity, 0, 0);                                   // 本体系速度
+    const double dt = 0.05;                                                      // 每次更新的时间
+
+    while (ui.ShouldQuit() == false) {
+        // 更新自身位置
+        Vec3d v_world = pose.so3() * v_body;	// 世界坐标系下的速度
+        pose.translation() += v_world * dt;		// 更新位姿的位移部分
+
+        // 更新自身旋转
+        if (FLAGS_use_quaternion) {
+            // 四元数下的旋转更新
+            // 笔记公式2.2.13
+            Quatd q = pose.unit_quaternion() * Quatd(1, 0.5 * omega[0] * dt, 0.5 * omega[1] * dt, 0.5 * omega[2] * dt);
+            q.normalize();
+            pose.so3() = SO3(q);
+        } else {
+            // SO3下的旋转更新
+            // 笔记公式：2.1.3
+            pose.so3() = pose.so3() * SO3::exp(omega * dt);
+        }
+    
+        LOG(INFO) << "pose: " << pose.translation().transpose();    // 将一条信息(INFO级别)记录到日志中，glog默认输出到终端
+        ui.UpdateNavState(sad::NavStated(0, pose, v_world));
+
+        usleep(dt * 1e6);   // usleep微秒为单位，1秒=1e6w微妙
+    }
+
+    ui.Quit();
+    return 0;
+}
+```
 
 ## 4. 滤波器与最优化理论
 
