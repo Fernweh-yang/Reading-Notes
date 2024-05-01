@@ -117,7 +117,7 @@ gflags是谷歌开发的一个处理命令行参数的c++库，不直接用argv�
     - L4级别需要高精地图，因为L4是在脑中的地图开车而不是看着路开车。
     - 高精地图本质上是结构化的向量数据，如车道形状、车道数、限速多少、是否是机动车道等信息。通常用JSON、XML、Protobuf语言来描述和储存。
 
-# 二、数据基础
+# 二、数学基础
 
 ## 1. 坐标系
 
@@ -573,6 +573,8 @@ $\mathbf{Q}$：测量误差的协方差矩阵
 
 ### 4.2 卡尔曼滤波器
 
+卡尔曼滤波器之所以被称为滤波器，是因为它可以将不想要的噪声成分从测量数据中滤除，只保留对我们真正感兴趣的状态信息。具体来说，卡尔曼滤波器利用系统状态的预测值和测量值之间的差异来不断调整对状态的估计，使之更加接近真实值。
+
 - 下面使用卡尔曼滤波器将k-1时刻的状态分布推导至k时刻，最终得到线性系统的最优无偏估计
 
   - 由于基于马尔可夫性假设，所以在实际编程中，我们只需要维护一个状态变量
@@ -734,7 +736,15 @@ $\mathbf{Q}$：测量误差的协方差矩阵
 
 ## 1. IMU系统的运动学
 
-### 1.1 IMU测量值
+### 1.0 IMU的运动模型
+
+由二、数学基础可知一个系统的运动模型为：
+$$
+\begin{aligned}&\dot{R}=R\omega^{\wedge},\quad\text{或}\quad\dot{q}=\frac{1}{2}q\omega,\\&\dot{p}=v,\\&\dot{v}=a.\end{aligned}\tag{1.0.1}
+$$
+旋转的运动模型推导见二、2.1.1和2.2.11
+
+### 1.1 IMU的测量模型
 
 > IMU通常由陀螺仪(Gyroscope)和加速度计(Accelerator)组成。我们可以通过IMU测量运动载体的惯性来推断物体本身的状态。
 >
@@ -751,11 +761,11 @@ $$
 
 实际中如果IMU不在车辆正中心，还会测量到旋转导致的离心力、科氏力和角加速度。各种悬挂、刷子等机械导致的振动也会影响IMU。
 
-### 1.2 IMU测量中的噪声模型
+### 1.2 IMU测量模型中加入噪声
 
 IMU噪声由两部分组成：测量噪声(Measurement Noise)和零偏(Bias)。
 
-- 加入噪声的**测量方程**：
+- 加入噪声的**测量模型**：
   $$
   \widetilde{a}=R^T(a-g)+b_a+\eta_a\\
   \widetilde{\omega}=\omega+b_g+\eta_g \tag{1.2.1}
@@ -807,12 +817,145 @@ IMU噪声由两部分组成：测量噪声(Measurement Noise)和零偏(Bias)。
 
 现实中IMU会按固定间隔时间对运动物体的惯性进行采样，因此数据是离散的。离散模型的推导见[论文](https://ieeexplore.ieee.org/document/1642588)，下面直接给出结论。
 
+- 离散噪声模型
 
+    陀螺仪和加速度计的离散测量噪声模型：
+    $$
+    \eta_{g}\left(k\right)\sim N\left(0,\frac{1}{\Delta t}Cov\left(\eta_{g}\right)\right)\\\eta_{a}\left(k\right)\sim N\left(0,\frac{1}{\Delta t}Cov\left(\eta_{a}\right)\right)\tag{1.3.1}
+    $$
+    零偏的离散模型：
+    $$
+    b_{g}\left(k+1\right)-b_{g}\left(k\right)\sim\mathcal{N}\left(0,\Delta tCov\left(b_{g}\right)\right)\\b_{a}\left(k+1\right)-b_{a}\left(k\right)\sim\mathcal{N}\left(0,\Delta tCov\left(b_{a}\right)\right)\tag{1.3.2}
+    $$
+    在现实中可以不考虑用协方差矩阵来表示，而是用对角矩阵，即忽略了各个轴之间的相关性。在程序中通常使用$\sigma_g,\sigma_a$来表示IMU测量噪声的标准差，$\sigma_{bg},\sigma_{ba}$来表示零偏游走的标准差：
+    $$
+    \begin{aligned}&\sigma_{g}\left(k\right)=\frac{1}{\sqrt{\Delta t}}\sigma_{g},\sigma_{a}\left(k\right)=\frac{1}{\sqrt{\Delta t}}\sigma_{a},\\&\sigma_{bg}\left(k\right)=\sqrt{\Delta t}\sigma_{bg},\sigma_{ba}\left(k\right)=\sqrt{\Delta t}\sigma_{ba}.\end{aligned}\tag{1.3.3}
+    $$
+    
+- 噪声标准差的物理单位：
+
+    - 离散的他们和被测物理量有相同单位
+      $$
+      \sigma_{g}\left(k\right)\rightarrow\frac{rad}{s},\sigma_{a}\left(k\right)\rightarrow\frac{m}{s^{2}},\sigma_{bg}\left(k\right)\rightarrow\frac{rad}{s},\sigma_{ba}\left(k\right)\rightarrow\frac{m}{s^{2}}
+      $$
+
+    - 连续的他们需要在离散方差上乘以或除以一个开方时间单位
+      $$
+      \sigma_{g}\rightarrow\frac{rad}{\sqrt{s}},\sigma_{a}\rightarrow\frac{m}{s\sqrt{s}},\sigma_{bg}\rightarrow\frac{rad}{s\sqrt{s}},\sigma_{ba}\rightarrow\frac{m}{s^{2}\sqrt{s}}
+      $$
 
 ## 2. 用IMU进行轨迹推算
 
+在只有IMU数据的情况下也可以推断系统的运动状态，但只有IMU的系统需要对IMU读书进行二次积分，IMU的测量误差的零偏就会导致状态变量很快的偏移
+
+### 2.1 利用IMU数据进行短时间航迹推算
+
+由1.0.1可知imu所在系统的运动学模型，由1.2.1可知IMU加入噪声后的测量模型，将测量模型加入运动学模型并忽略噪声中的测量噪声只保留零偏后可得：
+$$
+\begin{aligned}
+&\dot{R}=R\left(\tilde{\omega}-b_{g}\right)^{\wedge},或\dot{q}=q\left[0,\frac{1}{2}\left(\tilde{\omega}-b_{g}\right)\right], \\
+&\dot{p}=v, \\
+&\dot{v}=R\left(\tilde{a}-b_{a}\right)+g.
+\end{aligned}\tag{2.1.1}
+$$
+2.1.1式可以从时间$t$积分到$t$+$\Delta t$：
+$$
+\begin{aligned}&R\left(t+\Delta t\right)=R\left(t\right)Exp\left(\left(\tilde{\omega}-b_{g}\right)\Delta t\right),或q\left(t+\Delta t\right)=q\left(t\right)\left[1,\frac{1}{2}\left(\tilde{\omega}-b_{g}\right)\Delta t\right],\\&p\left(t+\Delta t\right)=p\left(t\right)+v\Delta t+\frac{1}{2}\left(R\left(t\right)\left(\tilde{a}-b_{a}\right)\right)\Delta t^{2}+\frac{1}{2}g\Delta t^{2},\\&v\left(t+\Delta t\right)=v\left(t\right)+R\left(t\right)\left(\tilde{a}-b_{a}\right)\Delta t+g\Delta t.\end{aligned}\tag{2.1.2}
+$$
+2.1.2式其实就是积分中最简单的欧拉法，再继续累积从$i$时刻一直递推到$j$时刻，imu读数累积为：
+$$
+\begin{aligned}
+\text{R}& =R_{i}\prod_{k=i}^{j-1}Exp\left(\left(\tilde{\omega}_{k}-b_{g,k}\right)\Delta t\right)或q_{j}=q_{i}\prod_{k=i}^{j-1}\left[1,\frac{1}{2}\left(\tilde{\omega}_{k}-b_{g,k}\right)\Delta t\right], \\
+p_{j}& =p_{k}+\sum_{k=i}^{j-1}\left[v_{k}\Delta t+\frac{1}{2}g\Delta t^{2}\right]+\frac{1}{2}\sum_{k=i}^{j-1}R_{k}\left(\tilde{a}_{k}-b_{a,k}\right)\Delta t^{2}, \\
+v_{j}& : =v_{i}+\sum_{k=i}^{j-1}\left[R_{k}\left(\tilde{a}_{k}-b_{a,k}\right)\Delta t+g\Delta t\right]. 
+\end{aligned}\tag{2.1.3}
+$$
+
+### 2.2 案例：IMU递推
+
+该案例使用IMU数据进行轨迹的推算，在没有其他观测数据时只能对式2.1.3进行二次积分来得到物体本身的位姿。可以发现这种积分很快就会发散，因此IMU不适合单独用来进行航迹推算。
+
 ## 3. 卫星导航
 
+全球卫星导航系统(Global Navigation Satellite System,GNSS)，简称卫星导航，是室外车辆定位的另一个信息来源。GNSS实际上可以提供车辆所需的所有定位信息，包括位姿、速度等物理量。但由于GNSS精度、频率、天气和场地等影响，卫星导航在自动驾驶中通常处于一种精度够用但稳定性很差的状态。
+
+**定位的原理是**：GNSS通过测量自身与卫星的距离来确定自身的位置，而与卫星的距离通过测量时间间隔来确定。
+
+**卫星信号来源**有：美国的全球定位系统GPS，中国的北斗BDS，俄罗斯的格洛纳斯系统GLONASS，和欧洲的伽利略系统GALILEO
+
+自动驾驶中最常用的卫星定位技术有：
+
+1. 单点GNSS定位，即传统的米级精度卫星定位。便宜且足以让驾驶员辨认自己处于哪条路上。
+
+2. RTK定位，(Real-Time Kinematic,实时动态差分)，有一个有精确位置的地面基站来校正，所以可以达到厘米级。
+
+   RTK接收器通常安装在车辆顶部，1个接收器就可以提供精确卫星定位的位置，如果有2个根据两者位置差还可以计算车辆的实时朝向(heading).
+
+### 3.1 世界坐标系
+
+1. 地理坐标系：
+
+   经纬度
+
+2. UTM坐标系：
+
+   将经度分为60个区，维度分为20个区并给予标号：经度为数字标号，纬度为字母标号。
+
+   在每个分区中，UTM坐标以正东、正北的米制坐标来表达车辆的位置：
+
+   北半球中有两种坐标系：
+
+   - 东北天坐标系：正东为X轴，正北为Y轴，按照右手坐标系Z轴指向天空
+
+   - 北东地坐标系：正北为X轴，正东为Y轴，Z指向地
+
+### 3.2 案例：RTK读数的显示
+
 ## 4. 使用误差状态卡尔曼滤波器实现组合导航
+
+现在结合RTK和IMU提供的数据，使用误差状态卡尔曼滤波器(Error State Kalman Filter, ESKF)来实现传统的组合导航算法。
+
+### 4.0 什么是ESKF
+
+- 相比传统KF,ESKF的优点：
+
+  1. 在旋转的处理上，ESKF 的状态变量可以采用最小化的参数表达，也就是使用三维变量来表达旋转的增量。该变量位于切空间中，而切空间是一个向量空间。传统 KF 需要用到四元数(4 维)或者更高维的变量来表达状态(旋转矩阵，9 维)，要不就得采用带有奇异性的表达方式(欧拉角)。
+
+  2. ESKF 总是在原点附近，离奇异点较远，数值方面更稳定，并且不会产生离工作点太远而
+     导致线性化近似不够的问题。
+
+  2. ESKF 的状态量为小量，其二阶变量相对来说可以忽略。同时，大多数雅可比矩阵在小量
+    情况下变得非常简单，甚至可以用单位阵代替。
+  3. 误差状态的运动学相比原状态变量更小(小量的运动学),因此可以把更新部分归人原状
+    态变量中。
+
+- ESKF中的变量名：
+
+  - 名义状态变量(Nominal State)：原状态变量
+  - 误差状态变量(Error State)：ESKF里的状态变量
+  - 真值：名义状态变量和误差状态变量之和
+
+  噪声的处理时放在误差状态变量中的，因此名义状态变量可以认为是没有噪声的。
+
+- ESKF的整体流程：
+
+  1. 将IMU测量数据积分后，放入名义状态变量。
+     - 名义状态在运动过程中会随着IMU数据而进行递推。
+  2. 由于没有考虑噪声，所以很快就会漂移，将此时的误差部分作为误差状态变量。
+     - 误差状态在运动过程中会受到高斯噪声影响而变大。
+     - ESKF的误差状态均值和协方差会描述误差状态扩大的具体数值(视为高斯分布)。
+  3. 在更新过程中利用从传感器数据(RTK)更新误差状态的后验均值和协方差。
+  4. 将这部分误差合入名义状态变量中得到真值
+  5. 将ESKF置零，完成一次预测。
+
+### 4.1 ESKF的数学推导
+
+### 4.2 离散时间的ESKF运动方程
+
+### 4.3 ESKF的运动过程
+
+### 4.4 ESKF的更新过程
+
+### 4.5 ESKF的误差状态后续处理
 
 ## 5. 案例：实现ESKF的组合导航
