@@ -592,6 +592,37 @@ set_tests_properties(myTestName PROPERTIES
 get_property(ResultVariable TARGET myTargetName PROPERTY CXX_STANDARD)
 ```
 
+#### 一些常用的地址变量：
+
+- `${PROJECT_SOURCE_DIR}`: 指向根目录root directory
+
+  > This root directory is typically the one where you have your top-level `CMakeLists.txt` file located.
+
+- `${CMAKE_CURRENT_DIRECTORY}`: 指向当前目录
+
+  也可以之间用`.`
+
+- `${CMAKE_CURRENT_PARENT_DIR}`: 指向当前目录的父目录
+
+  也可以用`..`
+
+- 如果想指向父目录的父目录可以：
+
+  1. 用相对地址
+
+     ```
+     include(../..parent_parent_header.h)
+     ```
+
+  2. 设置变量
+
+     ```
+     set(parent_parent_dir ${CMAKE_CURRENT_PARENT_DIR}/../..)
+     include(${parent_parent_dir}/parent_parent_header.h)
+     ```
+
+     
+
 ### 2.2.3 Cmake中的编程
 
 #### if语句

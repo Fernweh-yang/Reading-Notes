@@ -38,6 +38,8 @@
 
 ## 2. 单独编译
 
+见每个test
+
 ## 3. Vscode
 
 需要在`c_cpp_properties.json`中加入
@@ -368,7 +370,6 @@ $$
   $$
   \mathbf{R}(t)=\mathbf{R}(t-1)exp(\omega\Delta t) \tag{2.1.3}
   $$
-  
   
 - 四元数和角速度之间的关系：
 
@@ -803,6 +804,10 @@ IMU噪声由两部分组成：测量噪声(Measurement Noise)和零偏(Bias)。
   $$
 
 ### 1.3 IMU的离散时间噪声模型
+
+现实中IMU会按固定间隔时间对运动物体的惯性进行采样，因此数据是离散的。离散模型的推导见[论文](https://ieeexplore.ieee.org/document/1642588)，下面直接给出结论。
+
+
 
 ## 2. 用IMU进行轨迹推算
 

@@ -120,3 +120,31 @@ terminator:`sudo apt-get install terminator`
 
   - 然后重启在右上角手动更改性能模式
 
+# 安装GNOME插件
+
+[参考](https://wiki.gnome.org/action/show/Projects/GnomeShellIntegration/Installation?action=show&redirect=Projects%2FGnomeShellIntegrationForChrome%2FInstallation)
+
+1. 安装本地扩展管理器
+
+    ```
+    sudo apt install gnome-shell gnome-tweaks
+    ```
+
+2. 先安装谷歌连接器
+
+    ```
+    sudo apt-get install chrome-gnome-shell
+    ```
+
+3. 查看gnome version
+
+   ```
+   gnome-shell --version
+   ```
+
+   ubuntu20的话是3.36.9
+
+4. 在[官网插件](https://extensions.gnome.org/extension/3733/tiling-assistant/)上下点按钮下载即可
+
+    
+
