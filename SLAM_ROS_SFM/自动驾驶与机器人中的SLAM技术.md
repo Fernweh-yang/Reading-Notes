@@ -925,9 +925,9 @@ $$
      导致线性化近似不够的问题。
 
   2. ESKF 的状态量为小量，其二阶变量相对来说可以忽略。同时，大多数雅可比矩阵在小量
-    情况下变得非常简单，甚至可以用单位阵代替。
+      情况下变得非常简单，甚至可以用单位阵代替。
   3. 误差状态的运动学相比原状态变量更小(小量的运动学),因此可以把更新部分归人原状
-    态变量中。
+      态变量中。
 
 - ESKF中的变量名：
 
@@ -948,9 +948,97 @@ $$
   4. 将这部分误差合入名义状态变量中得到真值
   5. 将ESKF置零，完成一次预测。
 
-### 4.1 ESKF的数学推导
+### 4.1 连续时间的ESKF运动方程
+
+设ESKF的真值状态为$x_t(t)=[p_t,v_t,R_t,b_{at}.b_{gt},g_t]^T$,下标t表示真值true。IMU的读数为$\tilde{w},\tilde{a}$。
+
+- 状态变量真值的导数相对于观测量之间的导数
+
+  将1.2.1的测量值代入1.0.1的运动模型，再加上1.2.4的噪声模型可得：
+  $$
+  \begin{aligned}
+  &\dot{p}_t&& =v_{t}, \\
+  &\dot{v}_{t}&& =R_{t}\left(\tilde{a}-b_{at}-\eta_{a}\right)+g_{t}, \\
+  &\dot{R}_{t}&& =R_{t}\left(\tilde{\omega}-b_{gt}-\eta_{g}\right)^{\wedge}, \\
+  &\dot{b}_{gt}&& =\eta_{bg}, \\
+  &\dot{b}_{at}&& =\eta_{ba}, \\
+  &\dot{g}_t&& =0. 
+  \end{aligned}\tag{4.1.1}
+  $$
+
+- 定义误差状态变量：
+  $$
+  \begin{aligned}
+  &p_{t}&& =p+\delta p, \\
+  &v_{t}&& =v+\delta v, \\
+  &R_{t}&& =R\delta R或q_{t}=q\delta q, \\
+  &b_{gt}&& =b_{g}+\delta b_{g}, \\
+  &b_{at}&& =b_{a}+\delta b_{a}, \\
+  &g_{t}&& =g+\delta g. 
+  \end{aligned}\tag{4.1.2}
+  $$
+  第一列即名义状态变量，第二列即误差状态变量。
+
+- **名义状态变量的运动方程**：
+
+  即4.1.1式不考虑噪声，因为噪声再误差状态方程中考虑。
+
+- **误差状态变量的运动方程**：
+
+  对误差项求导可得：(推导见书P75-77)
+  $$
+  \begin{aligned}
+  \delta\dot{p}& =\delta v, \\
+  \delta\dot{v}& =-R\left(\tilde{a}-b_{a}\right)^{\wedge}\delta\theta-R\delta b_{a}-\eta_{a}+\delta g, \\
+  \delta\dot{\theta}& =-\left(\tilde{\omega}-b_{g}\right)^{\wedge}\delta\theta-\delta b_{g}-\eta_{g}, \\
+  \delta\dot{b}_{g}& =\eta_{bg}, \\
+  \delta\dot{b}_{a}& =\eta_{ba}, \\
+  \delta\dot{g}& =0. 
+  \end{aligned}\tag{4.1.3}
+  $$
 
 ### 4.2 离散时间的ESKF运动方程
+
+从4.1.1和4.1.3的连续形式分别推出下面的离散形式
+
+- 名义状态变量的离散时间运动方程：
+  $$
+  \begin{aligned}
+  p\left(t+\Delta t\right)& =p\left(t\right)+v\Delta t+\frac{1}{2}\left(R\left(\tilde{a}-b_{a}\right)\right)\Delta t^{2}+\frac{1}{2}g\Delta t^{2} \\
+  v\left(t+\Delta t\right)& =v\left(t\right)+R\left(\tilde{a}-b_{a}\right)\Delta t+g\Delta t, \\
+  R\left(t+\Delta t\right)& =R\left(t\right)Exp\left(\left(\tilde{\omega}-b_{g}\right)\Delta t\right), \\
+  b_{g}\left(t+\Delta t\right)& =b_{g}\left(t\right), \\
+  b_{a}\left(t+\Delta t\right)& =b_{a}\left(t\right), \\
+  g\left(t+\Delta t\right)& =g\left(t\right). 
+  \end{aligned}\tag{4.2.1}
+  $$
+
+- 误差状态变量的离散时间运动方程：
+  $$
+  \begin{aligned}
+  &\delta p\left(t+\Delta t\right)&& =\delta p+\delta v\Delta t, \\
+  &\delta v\left(t+\Delta t\right)&& =\delta v+\left(-R\left(\tilde{a}-b_{a}\right)^{\wedge}\delta\theta-R\delta b_{a}+\delta g\right)\Delta t-\eta_{v}, \\
+  &\delta\theta\left(t+\Delta t\right)&& =Exp\left(-\left(\tilde{\omega}-b_{g}\right)\Delta t\right)\delta\theta-\delta b_{g}\Delta t-\eta_{\theta}, \\
+  &\delta b_{g}\left(t+\Delta t\right)&& =\delta b_{g}+\eta_{g}, \\
+  &\delta b_{a}\left(t+\Delta t\right)&& =\delta b_{a}+\eta_{a}, \\
+  &\delta g\left(t+\Delta t\right)&& =\delta g 
+  \end{aligned}\tag{4.2.2}
+  $$
+
+  > 噪声项不参与递推，他们被单独的归入噪声部分。
+  >
+  > 连续时间下，噪声可以视为随机过程的能量谱密度。
+  >
+  > 离散时间下，噪声就是随机变量，可以写为：
+  > $$
+  > \sigma\left(\eta_{v}\right)=\Delta t\sigma_{a}\left(k\right),\quad\sigma\left(\eta_{\theta}\right)=\Delta t\sigma_{g}\left(k\right),\quad\sigma\left(\eta_{g}\right)=\sqrt{\Delta t}\sigma_{bg},\quad\sigma\left(\eta_{a}\right)=\sqrt{\Delta t}\sigma_{ba}
+  > $$
+
+- 
+
+**4.2.1和4.2.2即ESKF中进行IMU递推的过程**，相当于KF的状态方程(见一、4.1.3式)。
+
+为了让ESKF滤波器收敛就需要外部的观测数据对KF进行修正，即所谓的组合导航。组合导航的方法有很多如EKF,ESKF,与积分和图优化。**下面是融合GNSS的观测值并使用ESKF来形成一个收敛的KF。**
 
 ### 4.3 ESKF的运动过程
 
