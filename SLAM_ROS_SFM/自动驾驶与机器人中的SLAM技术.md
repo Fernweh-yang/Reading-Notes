@@ -1034,13 +1034,37 @@ $$
   > \sigma\left(\eta_{v}\right)=\Delta t\sigma_{a}\left(k\right),\quad\sigma\left(\eta_{\theta}\right)=\Delta t\sigma_{g}\left(k\right),\quad\sigma\left(\eta_{g}\right)=\sqrt{\Delta t}\sigma_{bg},\quad\sigma\left(\eta_{a}\right)=\sqrt{\Delta t}\sigma_{ba}
   > $$
 
-- 
-
 **4.2.1和4.2.2即ESKF中进行IMU递推的过程**，相当于KF的状态方程(见一、4.1.3式)。
 
 为了让ESKF滤波器收敛就需要外部的观测数据对KF进行修正，即所谓的组合导航。组合导航的方法有很多如EKF,ESKF,与积分和图优化。**下面是融合GNSS的观测值并使用ESKF来形成一个收敛的KF。**
 
 ### 4.3 ESKF的运动过程
+
+4.2.2式的误差状态变量的离散时间运动方程可以整体记为：
+$$
+\delta x_{k+1}=f(\delta x_k)+w,w\sim\mathcal{N}(0,Q)\tag{4.3.1}
+$$
+其中w为噪声，Q为：
+$$
+Q=diag\left(0_{3},Cov\left(\eta_{v}\right),Cov\left(\eta_{\theta}\right),Cov\left(\eta_{g}\right),Cov\left(\eta_{a}\right),0_{3}\right)\tag{4.3.2}
+$$
+4.3.2式两端为0是因为4.2.2式的第一和最后一个方程本身没有噪声。
+
+计算误差状态变量的运动方程的线性化形式为：
+$$
+\delta x\left(t+\Delta t\right)=\underbrace{f\left(\delta x\left(t\right)\right)}_{=0}+F\delta x+w\tag{4.3.3}
+$$
+F是线性化后的雅可比矩阵：
+$$
+F=\begin{bmatrix}I&I\Delta t&0&0&0&0\\0&I&-R(\tilde{a}-b_{\mathrm{a}})^{\wedge}\Delta t&0&-R\Delta t&I\Delta t\\0&0&Exp\left(-(\tilde{\omega}-b_{\mathrm{g}})\Delta t\right)&-I\Delta t&0&0\\0&0&0&I&0&0\\0&0&0&0&I&0\\0&0&0&0&0&I\end{bmatrix}\tag{4.3.4}
+$$
+再4.3.3的基础上执行ESKF的**预测过程**：
+$$
+\begin{aligned}\delta x_{pred}&=F\delta x,\\P_{pred}&=FPF^{\top}+Q\end{aligned}\tag{4.3.5}
+$$
+
+- 误差状态再每次更新后都会被重置$\delta x=0$，所以4.3.5式的第一个方程没什么意义。
+- 4.3.5式的第二个方程，协方差，则描述了整个误差估计中的分布情况。
 
 ### 4.4 ESKF的更新过程
 
