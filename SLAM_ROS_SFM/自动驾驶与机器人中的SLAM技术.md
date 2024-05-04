@@ -1038,7 +1038,7 @@ $$
 
 为了让ESKF滤波器收敛就需要外部的观测数据对KF进行修正，即所谓的组合导航。组合导航的方法有很多如EKF,ESKF,与积分和图优化。**下面是融合GNSS的观测值并使用ESKF来形成一个收敛的KF。**
 
-### 4.3 ESKF的运动过程
+### 4.3 ESKF的运动(预测)过程
 
 4.2.2式的误差状态变量的离散时间运动方程可以整体记为：
 $$
@@ -1068,6 +1068,128 @@ $$
 
 ### 4.4 ESKF的更新过程
 
+- 假设一个传感器能对状态变量产生观测，其观测方程为:
+  $$
+  z=h(x)+v,v\sim\mathcal{N}(0,V)\tag{4.4.1}
+  $$
+
+  - $z$:观测数据
+  - $h$:观测方程
+  - $v$:观测噪声
+  - $V$:该噪声的协方差矩阵
+
+- ESKF拥有名义状态$x$的估计及误差状态$\delta x$的估计，需要更新的式误差状态，
+
+  1. 首先计算观测方程对误差状态的雅可比矩阵：
+     $$
+     H=\frac{\partial h}{\part\delta x}|_{x_{pred}}\tag{4.4.2}
+     $$
+
+  2. 计算卡尔马增益K，进而计算误差状态的更新过程
+     $$
+     \begin{aligned}
+     &\text{K} =P_{pred}H^{T}\left(HP_{pred}H^{T}+V\right)^{-1}, \\
+     &\delta x=K\left(z-h\left(x_{pred}\right)\right), \\
+     &x=x_{pred}+\delta x, \\
+     &P=\left(I-KH\right)P_{pred} 
+     \end{aligned}\tag{4.4.3}
+     $$
+
+     - $K$:卡尔曼增益
+     - $P_{pred}$：预测的协方差矩阵
+     - $P$：修正后的协方差矩阵
+
+- 大部分观测数据是对名义状态的观测，此时4.4.2式的雅可比矩阵$H$需要通过链式法则来计算
+  $$
+  H=\frac{\partial h}{\partial x}\frac{\partial x}{\partial\delta x}\tag{4.4.4}
+  $$
+
+  - 第一项只需要对观测方程进行线性化
+
+  - 第二项计算为：
+    $$
+    \frac{\partial x}{\partial\delta x}=diag\left(I_{3},I_{3},\frac{\partial Log\left(R\left(Exp\left(\delta\theta\right)\right)\right)}{\partial\delta\theta},I_{3},I_{3},I_{3}\right)\tag{4.4.5}
+    $$
+
+    - 旋转部分计算用右乘BCH：
+      $$
+      \frac{\partial Log\left(R\left(Exp\left(\delta\theta\right)\right)\right)}{\partial\delta\theta}=J_{r}^{-1}\left(R\right)\tag{4.4.6}
+      $$
+      
+
 ### 4.5 ESKF的误差状态后续处理
 
+在4.3和4.4对误差状态的估计修正后，就需要把误差状态归入名义状态得到真值，然后重置ESKF。
+
+- 归入公式即：
+  $$
+  \begin{align}
+  p_{k+1}&=p_{k}+\delta p_{k},\\
+  v_{k+1}&=v_{k}+\delta v_{k},\\
+  R_{k+1}&=R_{k}Exp\left(\delta\theta_{k}\right),\\
+  b_{g,k+1}&=b_{g,k}+\delta b_{g,k},\\
+  b_{a,k+1}&=b_{a,k}+\delta b_{a,k},\\
+  g_{k+1}&=g_k+\delta g_k
+  \end{align}\tag{4.4.7}
+  $$
+
+- 重置ESKF分为2个部分：
+
+  1. 均值：
+
+     对任意变量$x$
+     $$
+     \delta x=0\tag{4.4.8}
+     $$
+
+  2. 协方差：
+     $$
+     P_{reset}=J_kPJ_k^T\tag{4.4.9}
+     $$
+
+     - $J_k=diag(I_3,I_3,J_{\theta}.I_3,I_3,I_3)$
+     - 对旋转的雅可比矩阵$J_\theta=I-\frac{1}{2}\delta\theta_k^{\wedge}$
+
 ## 5. 案例：实现ESKF的组合导航
+
+实现了一个融合IMU和GNSS观测的ESKF
+
+
+
+# 四、预积分学
+
+- 第三章已解决：
+
+  将2次GNSS观测之间的IMU数据进行积分，作为ESKF的预测过程。此时IMU数据是一次性的被积分到当前估计值上，然后用观测数据更新当时的估计值。
+
+- 想解决的问题：
+
+  希望重复利用IMU数据，即使状态变量发生改变，也希望IMU数据的计算和当时的状态估计无关。
+
+- 新方法：预积分学
+
+  将一段时间内IMU测量数据累积，建立与积分测量，同时保证测量值与状态变量无关。
+
+## 1. IMU状态的预积分学
+
+## 2. 案例：实现预积分
+
+
+
+# 五、基础点云处理
+
+## 1. 激光雷达传感器与点云的数学模型
+
+## 2. 最近邻问题
+
+## 3. 拟合问题
+
+# 六、2D SLAM
+
+# 七、3D SLAM
+
+# 八、紧耦合LIO系统
+
+# 九、自动驾驶车辆的离线地图构建
+
+# 十、自动驾驶车辆的实时定位系统
