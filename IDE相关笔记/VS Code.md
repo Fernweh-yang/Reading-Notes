@@ -266,6 +266,60 @@ lsd
 
       比如我要调试core的node: dataset，就选dataset
 
+# 连接SSH
+
+1. vscode安装remote-ssh插件
+
+2. 生成本机密钥并复制公钥
+
+   ```
+   ssh-keygen -t rsa -C "youremail@example.com" 
+   xclip -sel clip < ~/.ssh/id_rsa.pub
+   ```
+
+3. 在远程服务器的~/.ssh文件夹中创建`authorized_keys` 文件
+
+   ```
+   touch ~/.ssh/authorized_keys
+   chmod 600 ~/.ssh/authorized_keys
+   ```
+
+4. 将第二步复制的公钥保存到authorized_keys中去(一行一个公钥)
+
+5. 配置vscode的config
+
+   - 点击左侧小图标：remote explorer的小齿轮打开第一个config文件`~/.ssh/config`
+
+   - 填入如下配置
+
+     如果有3个服务器可以连：
+
+     ```
+     # Read more about SSH config files: https://linux.die.net/man/5/ssh_config
+     Host server1
+         HostName 100.10.160.81
+         User yang.xu
+         IdentityFile ~/.ssh/id_rsa
+     
+     Host server2
+         HostName 100.10.160.82
+         User yang.xu
+         IdentityFile ~/.ssh/id_rsa
+     
+     Host server3
+         HostName 100.10.160.83
+         User yang.xu
+         IdentityFile ~/.ssh/id_rsa
+     ```
+
+     - Host ：连接的主机名称，可自定义;
+     - Hostname ：远程主机的 IP 地址;
+     - User ：用于登录远程主机的用户名;
+     - Port ：用于登录远程主机的端口，SSH 默认为 22 ;
+     - IdentityFile ：本地的私钥文件 id_rsa 路径;
+
+6. 重启vscode后，就可以在左侧小图标：remote explorer页面中看到服务器了。选择一个服务器连接
+
 # Plugins
 
 ## 1. Codewhisperer
