@@ -117,8 +117,7 @@ test:$(OBJ)							#引用变量，$(OBJ)
 - 自动化变量
 
   - 规则的命令是对所有这一类文件的描述。我们在 Makefile 中描述规则时，依赖文件和目标文件是变动的，显然在命令中不能出现具体的文件名称，否则模式规则将失去意义。
-  - 
-
+  
   | 自动化变量 | 说明 |
   | ---------- | -------------- |
   | @         | 表示规则的目标文件名。如果目标是一个文档文件（Linux 中，一般成 .a 文件为文档文件，也称为静态的库文件），那么它代表这个文档的文件名。在多目标模式规则中，它代表的是触发规则被执行的文件名。 |
@@ -128,9 +127,9 @@ test:$(OBJ)							#引用变量，$(OBJ)
   | ^         | 代表的是所有依赖文件列表，使用空格分隔。如果目标是静态库文件，它所代表的只能是所有的库成员（.o 文件）名。一个文件可重复的出现在目标的依赖中，变量“\^”只记录它的第一次引用的情况。就是说变量“\^”会去掉重复的依赖文件。 |
   | +         | 类似“^”，但是它保留了依赖文件中重复出现的文件。主要用在程序链接时库的交叉引用场合。 |
   | *         | 在模式规则和静态模式规则中，代表“茎”。“茎”是目标模式中“%”所代表的部分（当文件名中存在目录时，“茎”也包含目录部分）。 |
-
+  
   - 例子
-
+  
   ```makefile
   test:test.o test1.o test2.o
            gcc -o $@ $^		#"$@" 代表的是目标文件test,“$^”代表的是依赖的文件
@@ -1205,3 +1204,63 @@ cmake -S . -B build --trace-source=CMakeLists.txt
 - 对于 multi-configuration generators，比如ide:
 
   可以在ide中加入配置
+
+
+
+# 3. Makefile作为脚本用
+
+- 复习下，Makefile一个命令的组成：
+
+  ```
+  <target> : <prerequisites>
+  [tab] <commands>	
+  ```
+
+- 运行：
+
+  - 在 GNU Make 中，默认情况下，它会在当前目录下查找名为 `Makefile` 或 `makefile` 的文件作为 Makefile。
+
+    ```
+    make
+    ```
+
+  - 可以使用 `-f` 选项来指定使用其他名称的文件作为 Makefile。
+
+    ```
+    make -f my_makefile
+    ```
+
+## 3.1 export: 将变量变为子进程的环境变量
+
+默认情况下，Makefile 中定义的变量仅在当前 Makefile 中有效，而不会传递给被调用的命令或子进程。
+
+当使用 `export` 关键字导出变量时，这些变量将会成为子进程的环境变量，可以在子进程中使用。
+
+```makefile
+# 定义一个变量
+FOO := hello
+# 导出变量
+export FOO
+
+# 可以直接写成：
+export FOO := hello
+
+# 定义一个目标
+foo:
+	@echo "FOO is $(FOO)"
+    @$(MAKE) -f child_makefile	# 直接写make也行
+```
+
+## 3.2 执行系统命令
+
+- `$(xx)` 语法是用来引用变量的值，
+
+- `$(shell)`在 Makefile 中执行系统命令
+
+```makefile
+CURRENT_DIRECTORY := $(shell pwd)
+
+all:
+    @echo "Current directory is: $(CURRENT_DIRECTORY)"
+```
+
