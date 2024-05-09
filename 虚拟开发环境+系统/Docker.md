@@ -4,6 +4,56 @@
 
 # Docker基础
 
+## 安装
+
+[参考](https://docs.docker.com/engine/install/ubuntu/)
+
+- 安装前要先卸可能会冲突的包
+
+  ```shell
+  for pkg in docker.io docker-doc docker-compose docker-compose-v2 podman-docker containerd runc; do sudo apt-get remove $pkg; done
+  ```
+
+- 设置APT仓库
+
+  ```shell
+  # Add Docker's official GPG key:
+  sudo apt-get update
+  sudo apt-get install ca-certificates curl
+  sudo install -m 0755 -d /etc/apt/keyrings
+  sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+  sudo chmod a+r /etc/apt/keyrings/docker.asc
+  
+  # Add the repository to Apt sources:
+  echo \
+    "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
+    $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+    sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+  sudo apt-get update
+  ```
+
+- 下载docker packages
+
+  ```shell
+  sudo apt-get install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+  ```
+
+- 验证
+
+  ```
+  sudo docker run hello-world
+  ```
+
+  
+
+## 卸载
+
+```shell
+sudo apt-get purge docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin docker-ce-rootless-extras
+sudo rm -rf /var/lib/docker
+sudo rm -rf /var/lib/containerd
+```
+
 ## Docker Architecture结构
 
   ![](https://docs.docker.com/get-started/images/docker-architecture.webp)
@@ -796,7 +846,333 @@ Docker 官方维护的一个公共仓库 [Docker Hub](https://hub.docker.com)，
   sudo docker exec -it lab_4_controller_pkg_terminus bash
   ```
 
+
+# Dockerfile
+
+ [Docker user guide](https://docs.docker.com/develop/) and the [Dockerfile reference](https://docs.docker.com/reference/dockerfile/).
+
+# [Docker-Compose](https://docs.docker.com/compose/)
+
+只用一个yaml配置文件来帮助构建所有的docker开发环境，默认地址为工作目录下的compose.yaml。
+
+可以用`docker compose -f xx.yaml`来指定用哪个配置文件
+
+## 使用场景：
+
+1. Development environments
+
+   使用compose可以只用一个命令`docker compose up`来创建和开始一个或多个docker容器。
+
+   把多页的"开发指南"缩减到一个compose.yaml文件
+
+2. Automated testing environments
+
+   compose可以只用几行命令，方便的创建和销毁测试环境
+
+   ```shell
+   docker compose up -d
+   ./run_tests
+   docker compose down
+   ```
+
+## 安装卸载：
+
+- 安装/升级
+
+  ```shell
+  sudo apt-get update
+  sudo apt-get install docker-compose-plugin
+  # 验证是否安装成功
+  docker compose version
+  ```
+
+- 卸载
+
+  ```shell
+  sudo apt-get remove docker-compose-plugin
+  ```
+
+## compose.yaml键汇总
+
+参考文档：https://docs.docker.com/compose/compose-file/
+
+## 简单的例子：
+
+实现一个网页开发的情景
+
+在一个目录下创建如下文件
+
+### 1.  创建app.py
+
+```python
+import time
+
+import redis                # 基于内存的数据存储系统
+from flask import Flask     # Flask轻量级web框架
+
+app = Flask(__name__)       # 这个实例将被用来定义路由、处理请求等。
+cache = redis.Redis(host='redis', port=6379)    # 创建了一个名为 cache 的 Redis 客户端对象，用于与 Redis 服务器建立连接
+                                                # 主机地址为 redis，端口为 6379
+def get_hit_count():
+    retries = 5             # 在发生连接错误时的重试次数。
+    while True:
+        try:
+            return cache.incr('hits')   # 调用 Redis 客户端对象的 incr 方法，对键为 'hits' 的值执行递增操作，并返回递增后的结果。
+        except redis.exceptions.ConnectionError as exc:
+            if retries == 0:
+                raise exc
+            retries -= 1
+            time.sleep(0.5)
+
+# 使用 Flask 应用程序实例的 route 装饰器来定义一个路由，即当访问根路径时执行下面的 hello 函数。
+@app.route('/')
+def hello():
+    count = get_hit_count()
+    return 'Hello World! I have been seen {} times.\n'.format(count)
+```
+
+### 2. 创建requirements.txt
+
+```txt
+flask
+redis
+```
+
+### 3. 创建Dockerfile
+
+```dockerfile
+# syntax=docker/dockerfile:1
+# 功能：
+# 当容器启动时，它会自动运行 Flask 应用程序，
+# 并在调试模式下监听容器内部的端口 5000（由之前的 EXPOSE 5000 声明）。
+
+# 基础镜像为Python3.10
+FROM python:3.10-alpine
+# 设置工作目录
+WORKDIR /code
+# 设置环境变量
+ENV FLASK_APP=app.py
+ENV FLASK_RUN_HOST=0.0.0.0
+# 安装gcc和其他依赖
+RUN apk add --no-cache gcc musl-dev linux-headers
+# 将主机上的 requirements.txt 文件复制到 Docker 镜像的当前工作目录中。
+COPY requirements.txt requirements.txt
+# 安装
+RUN pip install -r requirements.txt
+# 容器内部打开端口 5000，以便其他容器或主机可以访问容器内的服务
+EXPOSE 5000
+# 将主机上的当前前目录的文件复制到 Docker 镜像的当前工作目录中。
+COPY . .
+# 容器启动时要执行的命令：flask run --debug
+CMD ["flask", "run", "--debug"]
+```
+
+### 4. 创建 compose.yaml
+
+compose.yaml中的服务对应一个个容器，这些容器可能是基于已经构建好的镜像创建的，也可能是根据 Dockerfile 构建的新镜像创建的。
+
+```yaml
+# 定义两个服务web和redis
+services:
+  # web服务使用的image通过构建当前文件夹下的Dockerfile
+  # 将容器内部的端口 5000 映射到主机的端口 8000。外部的请求将通过主机的 8000 端口转发到容器内部的 5000 端口。
+  web:
+    build: .
+    ports:
+      - "8000:5000"
+  # redis服务使用公共的redis image
+  redis:
+    image: "redis:alpine"
+```
+
+### 5. compose up/down 启动/停止所有服务
+
+- 在工程目录下通过如下命令，启动compose.yaml中定义的多个服务(构建不同镜像的容器)
+
+  ```
+  sudo docker compose up
+  ```
+
+- 容器构建好后，在浏览器中输入：http://localhost:8000/
+
+  可以看到：
+
+  Hello World! I have been seen 1 times.
+
+  刷新页面后：
+
+  Hello World! I have been seen 2 times.
+
+- 此时查看镜像可以看到:
+
+  ```shell
+  $ sudo docker image ls
+  ```
+
+  REPOSITORY        TAG       IMAGE ID       CREATED         SIZE
+  docker_test-web   latest    a7b5aca8fda4   2 minutes ago   224MB
+  redis             alpine    435993df2c8d   4 months ago    41MB
+  hello-world       latest    d2c94e258dcb   12 months ago   13.3kB
+
+  - 可以用`docker inspect <tag or id>`来检查镜像
+
+- 停止 Docker Compose 文件中定义的所有服务的容器:
+
+  ```shell
+  # 在原terminal可以直接ctrl + c
   
+  # 新建一个terminal，在相同工程目录下
+  docker compose down
+  ```
+
+  compose文件中定义的服务(容器)，网络，卷，临时文件，日志等所有资源都会被删除。就不用`docker container rm`等额外命令去关掉他们了
+
+- 如果只想启动某个服务，可以加上build命令，比如只想启动web服务
+
+  ```
+  docker compose -f xx-compose.yml build web
+  ```
+
+### 6. 使用watch来自动保存代码到运行的容器里
+
+[Use Compose Watch](https://docs.docker.com/compose/file-watch/)允许我们不重新构建容器，修改内容后，直接保存到了容器李
+
+- 修改compose.yaml为：
+
+  相比4 添加了develop: 部分
+
+  ```yaml
+  # 定义两个服务web和redis
+  services:
+    # web服务使用的image通过构建当前文件夹下的Dockerfile
+    # 将容器内部的端口 5000 映射到主机的端口 8000。外部的请求将通过主机的 8000 端口转发到容器内部的 5000 端口。
+    web:
+      build: .
+      ports:
+        - "8000:5000"
+        # sudo port=5000 docker compose up
+        # - "8000:${port}"
+      
+      develop:
+        watch:
+          - action: sync
+            path: .
+            target: /code
+    # redis服务使用公共的redis image
+    redis:
+      image: "redis:alpine"
+  ```
+
+- 重新构建app
+
+  - `docker compose watch`, or
+  - `docker compose up --watch`
+
+- 此时我们修改1.中的app.py的24行的返回信息，http://localhost:8000/网页刷新后，新页面的信息也会跟着变。
 
 
+
+### 7. 分开不同的services
+
+ [Working with multiple Compose files](https://docs.docker.com/compose/multiple-compose-files/).
+
+在大的项目中可能有好多services(containers)，而每个service的维护人又来自不同团队，这时就可以将不同service放在不同的compose.yaml文件中了。
+
+- 在工程目录创建新的`infra.yaml`
+
+  将compose.yaml中的redis服务放过来
+
+  ```yaml
+  services:
+    redis:
+      image: "redis:alpine"
+  ```
+
+  在compose.yaml中添加infra.yaml, 并移除redis服务
+
+  ```yaml
+  include:
+     - infra.yaml
+  services:
+    web:
+      build: .
+      ports:
+        - "8000:5000"
+      develop:
+        watch:
+          - action: sync
+            path: .
+            target: /code
+  ```
+
+- 运行
+
+  ```
+  docker compose up
+  ```
+
+
+
+## 复杂点的例子
+
+```yaml
+version: "3.0"
+services:
+  loam:
+    # 指定要使用的镜像
+    image: xx/loam:${latest}
+    # 将容器连接到主机网络。这意味着容器将与主机共享网络命名空间，可以直接访问主机上的网络接口。默认为bridge(创建一个虚拟网络接口)
+    network_mode: "host"
+    # 容器名称为loam
+    container_name: loam
+    # 容器可以使用gpu加速
+    runtime: nvidia
+    # 以容器的 root 用户身份运行。这允许容器内的进程执行需要特权的操作
+    user: root # calib
+    # 容器与主机共享IPC命名空间，IPC（Inter-Process Communication，进程间通信）是一种操作系统提供的机制，用于在不同进程之间进行数据交换和通信
+    ipc: host
+    # 为容器分配一个伪终端。如果没有这个终端，容器会在后台运行，并且无法直接和容器交互
+    tty: true
+    # 指定容器的工作目录为容器内部的/workspace/src/pago_loam
+    working_dir: /workspace/src/pago_loam
+    # 定义容器的工作目录
+    build:
+      # 构建容器的相对(上下文)路径为当前路径
+      context: .
+      # 指定Dockerfile地址
+      dockerfile: docker/Dockerfile
+      # Dockerfile中用到的变量
+      args:
+        - UID=${UID:-1001}
+        - GID=${GID:-1001}
+        - USERNAME=${USERNAME:-default}
+        - PASSWORD=${PASSWORD:-default}
+        - BASE_IMAGE=osrf/ros:noetic-desktop-full
+    # 卷放在容器(服务)内部，说明宿主机的这些地址的数据只能由当前容器(服务)只用
+    volumes:
+      - .:/workspace/src/pago_loam
+    # 定义了要在容器中使用的宿主机设备
+    # 将主机上的 "/dev/dri" 设备挂载到容器中，以便容器可以访问 GPU。
+    devices:
+      - /dev/dri:/dev/dri
+    # 定义容器的环境变量
+    environment:
+      - UID=${UID:-1000}                      # 设置容器中的 UID 环境变量，默认为 1000。
+      - DISPLAY=unix$DISPLAY                  # 设置 X11 显示服务器的地址。
+      - QT_X11_NO_MITSHM=1                    # 设置 Qt 应用程序禁用共享内存扩展。
+      - NVIDIA_VISIBLE_DEVICES=all            # 指定 NVIDIA GPU 可见设备。
+      - NVIDIA_DRIVER_CAPABILITIES=all        # 指定 NVIDIA GPU 驱动程序能力。
+      #      - NVIDIA_REQUIRE_CUDA=cuda>=9.0
+      - XAUTHORITY=/tmp/.docker.xauth         # 指定 X11 授权文件的路径
+
+# 卷放在外部，说明宿主机的这些地址的数据和所有的容器可以共享
+# volumes from other container auto4d-ground-dev
+volumes:
+  #  kitti_data:
+  #    name: kitti_data
+  #    external: true
+  auto_calib_data:
+    name: auto_calib_data
+    external: true
+```
 
