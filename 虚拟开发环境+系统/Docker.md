@@ -791,7 +791,7 @@ Docker 官方维护的一个公共仓库 [Docker Hub](https://hub.docker.com)，
 
 # Docker应用
 
-## \#、使用SSH从GITHUB上下载代码
+## 使用SSH从GITHUB上下载代码
 
 注意，如果用的是id_e25519，需要将下面的id_rsa全部改成id_e25519
 
@@ -846,6 +846,27 @@ Docker 官方维护的一个公共仓库 [Docker Hub](https://hub.docker.com)，
   sudo docker exec -it lab_4_controller_pkg_terminus bash
   ```
 
+##  启动一个交互式bash shell
+
+`docker exec -it parser bash`
+
+- `docker exec` 是 Docker 命令，用于在正在运行的容器中执行命令。
+- `-it` 选项告诉 Docker 分配一个交互式的终端，并使得我们能够与容器进行交互。
+- "parser" 是容器的名称或 ID，表示我们要在哪个容器中执行命令。
+- `bash` 是要执行的命令，这里是启动一个 Bash shell。
+
+## 与宿主机进行资源交互
+
+所有容器都可以通过挂载 "auto_calib_data" 卷来访问宿主机上的当前工作目录中的 "data" 子目录：
+
+`docker volume create -d local --opt type=none --opt o=bind --opt device=$PWD/data auto_calib_data`
+
+- `docker volume create` 是用于创建 Docker 卷的命令。
+- `-d local` 指定了使用本地驱动程序创建卷。
+- `--opt type=none` 表示不使用任何类型的特殊卷。
+- `--opt o=bind` 指定了挂载选项，将卷与宿主机上的目录进行绑定。
+- `--opt device=$PWD/data` 指定了要绑定的目录，这里使用了宿主机上的当前工作目录中的 "data" 子目录。
+- "auto_calib_data" 是要创建的卷的名称。
 
 # Dockerfile
 
@@ -1176,3 +1197,14 @@ volumes:
     external: true
 ```
 
+
+
+## 不堵塞命令行的运行容器：
+
+通过`-d`/`--detach`选项：
+
+```
+docker compose -f docker-compose.yml up -d parser
+```
+
+- 让该docker-compose.yaml中的服务`parser`在后台运行，而不会阻塞命令行
