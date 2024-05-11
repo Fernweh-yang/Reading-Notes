@@ -1197,7 +1197,10 @@ volumes:
     external: true
 ```
 
-
+- 可以发现服务中既有build又有image
+  - `docker compose pull`：不会考虑build部分，只会尝试从registry上拉取image中指定的镜像。
+  - `docker compose build`：不会考虑image部分，只会根据build中定义的dockerfile去构建新镜像。
+  - `docker compose up`：优先使用image，如果image没定义就使用build。
 
 ## 不堵塞命令行的运行容器：
 
