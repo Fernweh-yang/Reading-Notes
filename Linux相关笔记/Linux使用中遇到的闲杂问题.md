@@ -128,6 +128,7 @@ terminator:`sudo apt-get install terminator`
 
     ```
     sudo apt install gnome-shell gnome-tweaks
+    sudo apt install gnome-shell-extensions
     ```
 
 2. 先安装谷歌连接器
@@ -148,3 +149,10 @@ terminator:`sudo apt-get install terminator`
 
     
 
+# 分屏
+
+在官网上安装[Tactile](https://extensions.gnome.org/extension/4548/tactile/)
+
+- 打开布局：win + t
+- 切换布局：win+t -> 1/2/3
+- 占多块：win+t -> 按顺序按想要的区域字母
