@@ -1170,6 +1170,8 @@ services:
         - PASSWORD=${PASSWORD:-default}
         - BASE_IMAGE=osrf/ros:noetic-desktop-full
     # 卷放在容器(服务)内部，说明宿主机的这些地址的数据只能由当前容器(服务)只用
+    # 冒号之前的是宿主机的地址
+    # 冒号之后的是容器内部的地址
     volumes:
       - .:/workspace/src/pago_loam
     # 定义了要在容器中使用的宿主机设备
