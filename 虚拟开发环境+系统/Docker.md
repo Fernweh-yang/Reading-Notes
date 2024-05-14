@@ -855,6 +855,8 @@ Docker 官方维护的一个公共仓库 [Docker Hub](https://hub.docker.com)，
 - "parser" 是容器的名称或 ID，表示我们要在哪个容器中执行命令。
 - `bash` 是要执行的命令，这里是启动一个 Bash shell。
 
+可以在多个终端分别输入上面的命令，从而实现多个终端和一个容器的交互。
+
 ## 与宿主机进行资源交互
 
 所有容器都可以通过挂载 "auto_calib_data" 卷来访问宿主机上的当前工作目录中的 "data" 子目录：
@@ -867,6 +869,8 @@ Docker 官方维护的一个公共仓库 [Docker Hub](https://hub.docker.com)，
 - `--opt o=bind` 指定了挂载选项，将卷与宿主机上的目录进行绑定。
 - `--opt device=$PWD/data` 指定了要绑定的目录，这里使用了宿主机上的当前工作目录中的 "data" 子目录。
 - "auto_calib_data" 是要创建的卷的名称。
+
+连上后宿主和容器对该地址的数据进行修改后，另一边也一样跟着修改，因为他们看到的数据就是同一个。
 
 # Dockerfile
 

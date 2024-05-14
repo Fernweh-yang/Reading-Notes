@@ -873,7 +873,26 @@ rosrun tf static_transform_publisher 1 0 0 0 0 0 1 world av1 100 __name:=av1broa
    rosrun rviz rviz -d ~/Desktop/as_ws/src/two_drones_pkg/config/default.rviz		
    ```
 
-   
+
+### 在launchfile中定义环境变量：
+
+通过`<env>` 标签可以在 `roslaunch` 文件中设置环境变量。
+
+- 例子：定义ROS日志消息的格式
+
+  通过设置这个变量，可以控制日志消息的输出格式，利于调试和监控ROS节点的行为：
+
+  ```xml
+  <env name="ROSCONSOLE_FORMAT" value="[${severity}] [${time}] [${file}:${line}] [${node}->${function}]: ${message}"/>
+  ```
+
+  - **${severity}**: 日志级别（例如，DEBUG、INFO、WARN、ERROR、FATAL）。
+  - **${time}**: 日志消息的时间戳。
+  - **${file}**: 生成日志消息的源文件名。
+  - **${line}**: 生成日志消息的源文件行号。
+  - **${node}**: 生成日志消息的 ROS 节点名称。
+  - **${function}**: 生成日志消息的函数名称。
+  - **${message}**: 实际的日志消息内容。
 
 ## 6. ROS通信框架
 
