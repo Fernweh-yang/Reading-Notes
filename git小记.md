@@ -148,6 +148,21 @@ $ git rebase upstream/main
   - `git branch dev`：创建一个叫dev的新分支
   - `git switch dev`:切换到dev分支
 
+- 切换到远程分支:
+
+  1. 查看远程分支有哪些`git branch -a`:
+
+     ```
+     * master
+       remotes/origin/HEAD -> origin/master
+       remotes/origin/master
+       remotes/origin/xy_env
+     ```
+
+  2. 切换到远程分支:`git switch -t origin/xy_env`
+
+     会在本地创建一个xy_env分支，并和远程的remotes/origin/xy_env相关联
+
 ### 2.4.3 merger合并分支
 
 `git merge xx`: 将分支xx合并到当前分支。
@@ -226,7 +241,8 @@ got push origin dev					# 不想关联远程分支的话，就每次都要同时
 
 ### 2.4.9查看分支
 - 查看本地分支:`git branch`
-- 查看所有分支：`git branch -a`
+- 查看远程分支：`git branch -r`
+- 查看所有分支：`git branch -a `
 
 
 ## 2.5 撤销变更

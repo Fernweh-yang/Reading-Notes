@@ -1585,6 +1585,33 @@ $ cd -
   # 比如设置为Warn,则会得到Warn,Error,Fatal的消息
   ```
 
+### 8.1 设置日志级别的不同方式
+
+1. 在launch文件中设置：
+
+   在launch file中使用 `rosparam` 标签设置参数 `/rosout` 的级别
+
+   ```
+   <rosparam>
+     rosout:
+       log_level: debug
+   </rosparam>
+   ```
+
+2. 在命令行中设置：
+
+   ```
+   rosrun my_package my_node _log_level:=debug
+   ```
+
+3. 使用 `rosparam` 命令行工具
+
+   ```
+   rosparam set /rosout/log_level debug
+   ```
+
+   
+
 ## 9. [ROS Bags](http://wiki.ros.org/rosbag)
 
 在 ROS 系统中，可以使用 bag 文件来保存和恢复系统的运行状态，比如录制雷达和相机话题的 bag 包，然后回放用来进行联合外参标定。
