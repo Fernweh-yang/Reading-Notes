@@ -243,7 +243,7 @@ lsd
                /************
                这个target需要设置为要调试的launch文件的绝对路径
                ************/
-               "target": "/home/yang/Desktop/SLAM_Code_Learning/lsd_ws/src/lsd_slam/lsd_slam_core/launch"
+               "target": "/home/yang/Desktop/SLAM_Code_Learning/lsd_ws/src/lsd_slam/lsd_slam_core/launch/xx.launch"
            },        
            {
                "name": "ROS: Attach",

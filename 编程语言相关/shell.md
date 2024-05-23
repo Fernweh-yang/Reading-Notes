@@ -175,6 +175,27 @@ source $ZSH/oh-my-zsh.sh
 plugins=(rails git ruby)
 ```
 
+### 安装第三方插件
+
+需要根据不同插件自己的安装文档来安装
+
+#### 1. **[zsh-autosuggestions](https://github.com/zsh-users/zsh-autosuggestions)**
+
+1. 将该插件放入oh my zsh的插件库(by default `~/.oh-my-zsh/custom/plugins`)
+
+   ```shell
+   git clone https://github.com/zsh-users/zsh-autosuggestions ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-autosuggestions
+   ```
+
+2. 将插件添加到配置文件
+
+   ```
+   plugins=( 
+       # other plugins...
+       zsh-autosuggestions
+   )
+   ```
+
 ## 创建别名
 
 查看[官网](https://github.com/ohmyzsh/ohmyzsh/wiki/Cheatsheet#directory)可发现Oh My Zsh已经设置好了一些命令的别名，可以有效减少某些常用长命令的敲击次数。
@@ -191,6 +212,8 @@ alias ct="{print -z Current time is $(date)}"
 ## 各种有用的功能：
 
 ### 1. `d` :在目录中穿越
+
+终端输入d后回车后：
 
 `d` 命令会列出我们最近进入的目录历史，并且会给这些目录加上序号，只需要输入对应目录的序号，即可重新进入该目录
 

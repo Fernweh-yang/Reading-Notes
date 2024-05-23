@@ -11,7 +11,7 @@
 
   额外的有课后作业答案和修改代码
 
-## 1. 全代码编译
+## 1. 本地编译
 
 1. [GIT仓库](https://github.com/Fernweh-yang/LiDAR-SLAM-code-comments)下载源码
 
@@ -36,9 +36,34 @@
    make -j4
    ```
 
-## 2. 单独编译
+## 2. Docker运行
 
-见每个test
+- 构建image
+
+  ```shell
+  docker build -t sad:v1 .
+  ```
+
+- 进入容器
+
+  ```shell
+  ./docker/docker_run.sh
+  ```
+
+- 在容器内编译运行
+
+  ```shell
+  cd ./thirdparty/g2o
+  mkdir build
+  cd build
+  cmake ..
+  make -j8
+  cd /sad
+  mkdir build
+  cd build
+  cmake ..
+  make -j8
+  ```
 
 ## 3. Vscode
 

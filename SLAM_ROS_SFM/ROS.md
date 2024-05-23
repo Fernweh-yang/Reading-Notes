@@ -825,6 +825,8 @@ ros::NodeHandle nh;
     </group>
   </launch>
   ```
+  
+  - 如果不加output="screen"，默认是输出到logfile的，默认地址在`~/.ros/log/run_id/node_name-number-stdout.log`
 
 ### 转换roslaunch和rosrun
 
@@ -893,6 +895,58 @@ rosrun tf static_transform_publisher 1 0 0 0 0 0 1 world av1 100 __name:=av1broa
   - **${node}**: 生成日志消息的 ROS 节点名称。
   - **${function}**: 生成日志消息的函数名称。
   - **${message}**: 实际的日志消息内容。
+
+### 命名空间
+
+- **全局命名空间**：以斜杠`/`开头，表示参数或话题在根命名空间下，例如`/some_parameter`。
+
+- **相对命名空间**：不以斜杠`/`开头，相对于当前节点的命名空间，例如`some_parameter`。
+
+- **私有命名空间**：使用波浪号`~`，表示参数是私有的，并且在节点的私有命名空间下，例如`~some_parameter`。
+
+- **全局节点句柄**（`ros::NodeHandle nh`）：
+
+  - 可以读取和设置 **全局 和 相对** 命名空间的参数。
+
+  - 但也可以通过完整的路径来访问私有命名空间中的参数：
+
+    私有命名空间是以节点名为基础的命名空间，例如 `/node_name/parameter_name`。
+
+    launch file:
+
+    ```yaml
+    <param name="~lidarType_is_AT" value="true"/>
+    ```
+
+    c++:
+
+    ```c++
+    ros::NodeHandle nh;
+    bool lidarType_is_AT;
+    nh.param<bool>("/your_node_name/lidarType_is_AT", lidarType_is_AT, true); 
+    ```
+
+- **私有节点句柄**（`ros::NodeHandle private_nh("~")`）：
+
+  - 专用于读取和设置**私有**命名空间的参数。
+
+  - 但也可以通过完整路径读取全局命名空间中的参数：
+
+    launch file:
+
+    ```yaml
+    <param name="/lidarType_is_AT" value="true"/>
+    ```
+
+    c++
+
+    ```c++
+    ros::NodeHandle private_nh("~");
+    bool lidarType_is_AT;
+    private_nh.param<bool>("/lidarType_is_AT", lidarType_is_AT, true);
+    ```
+
+    
 
 ## 6. ROS通信框架
 
@@ -2573,11 +2627,7 @@ add_dependencies(
 
 # 二、ROS进阶
 
-## \#、Autonomous Systems课程相关:
-
-### Lab2:Task2
-
-- 运用tf，进行坐标系frame转换
+## 运用tf，进行坐标系frame转换
 
 ```c++
 #include <ros/ros.h>
@@ -2644,7 +2694,7 @@ int main(int argc, char** argv){
 
 
 
-## \#、ROS中TF的使用
+## ROS中TF的使用
 
 - 简介：
 
@@ -3003,7 +3053,7 @@ int main(int argc, char** argv){
 
   
 
-## \#、读取YAML文件
+## 用参数服务器读取YAML文件
 
 - **在包内创建一个YAML文件**
 
@@ -3091,6 +3141,155 @@ int main(int argc, char** argv){
     nh.getParam("/custom_prefix/number_float", number_to_get);
     ```
   
+
+## 多传感器数据的时间同步
+
+使用message_filter:[Policy-Based Synchronizer](http://wiki.ros.org/message_filters#Time_Synchronizer:~:text=each%20message%27s%20timestamp-,Policy%2DBased%20Synchronizer,-%5BROS%201.1%2B%5D)来进行时间同步，[参考](https://blog.csdn.net/He3he3he/article/details/109643391)
+
+### 一个例子：
+
+- main.cpp
+
+  ```c++
+  #include "src/image_projection.h"
+  // # include "src/image_projection_test.h"
+  
+  int main(int argc, char** argv) {
+  
+    ros::init(argc, argv, "pago_loam");
+  
+    ImageProjection IP;
+  
+    ROS_INFO("\033[1;32m---->\033[0m Image Projection Started.");
+  
+    ros::spin();
+    return 0;
+  }
+  ```
+
+- image_projection.h
+
+  ```c++
+  #include <ros/ros.h>
+  #include <message_filters/subscriber.h>
+  #include <message_filters/synchronizer.h>
+  #include <message_filters/sync_policies/exact_time.h>
+  #include <message_filters/sync_policies/approximate_time.h>
+  #include "gnd_msgs/cloud_info.h"
+  #include "gnd_msgs/ground_estimate.h"
+  
+  class ImageProjection{
+      public:
+          ImageProjection();
+          // 时间同步后的回调函数 
+          void callback(const gnd_msgs::ground_estimate::ConstPtr& laserCloudMsg_front,
+                        const gnd_msgs::ground_estimate::ConstPtr& laserCloudMsg_rear,
+                        const gnd_msgs::ground_estimate::ConstPtr& laserCloudMsg_left,
+                        const gnd_msgs::ground_estimate::ConstPtr& laserCloudMsg_right);
+      private:
+          ros::NodeHandle nh;
+          // c++至多可以接收8个topic来做时间戳对齐
+          // 每个topic的msg都可以不一样，但要保证这些msg中要包含std_msgs/Header类型的信息
+          // 因为对齐的时候依照的数据是std_msgs/Header中的时间戳字段 (header.stamp)来完成的
+          message_filters::Subscriber<gnd_msgs::ground_estimate> subLaserCloud_front;
+          message_filters::Subscriber<gnd_msgs::ground_estimate> subLaserCloud_rear;
+          message_filters::Subscriber<gnd_msgs::ground_estimate> subLaserCloud_left;
+          message_filters::Subscriber<gnd_msgs::ground_estimate> subLaserCloud_right;
+          // 定义时间戳对齐方案：有ExactTime和ApproximateTime两种
+          //typedef sync_policies::ExactTime<....> ...
+          typedef message_filters::sync_policies::ApproximateTime<gnd_msgs::ground_estimate, gnd_msgs::ground_estimate,
+                                                                  gnd_msgs::ground_estimate, gnd_msgs::ground_estimate> syncpolicy;
+          // 将要同步的topic订阅器传递给同步器
+          // 同步策略这里设置缓存大小为10，即最大缓存消息数量为10。
+          // 这样即使在同步过程中，有些消息到达的顺序不同，也能通过缓存来找到最匹配的数据
+          typedef message_filters::Synchronizer<syncpolicy> Sync;
+          boost::shared_ptr<Sync> sync_;
+  };
+  ```
+
+- image_projection.cpp
+
+  ```c++
+  #include "image_projection_test.h"
+  
+  ImageProjection::ImageProjection(){
+      subLaserCloud_front.subscribe(nh,"/patchworkpp/gnd_front",1);
+      subLaserCloud_rear.subscribe(nh,"/patchworkpp/gnd_rear",1);
+      subLaserCloud_left.subscribe(nh,"/patchworkpp/gnd_left",1);
+      subLaserCloud_right.subscribe(nh,"/patchworkpp/gnd_right",1);
+  
+      sync_.reset(new Sync(syncpolicy(10),subLaserCloud_front,subLaserCloud_rear,subLaserCloud_left,subLaserCloud_right));
+      sync_->registerCallback(boost::bind(&ImageProjection::callback,this,_1,_2,_3,_4));
+  }
+  
+  void ImageProjection::callback(const gnd_msgs::ground_estimate::ConstPtr& laserCloudMsg_front,
+                                  const gnd_msgs::ground_estimate::ConstPtr& laserCloudMsg_rear,
+                                  const gnd_msgs::ground_estimate::ConstPtr& laserCloudMsg_left,
+                                  const gnd_msgs::ground_estimate::ConstPtr& laserCloudMsg_right){
+      std::cout<< "!!!!!!!!!!wow in callback!!!!!!!!!!!" << std::endl;
+  }
+  ```
+
+  
+
+一个例子：
+
+```c++
+#include "gnd_msgs/ground_estimate.h"
+class ImagePRojection{
+    private:
+    	...
+    public:
+        // 在类的构造函数中完成时间戳的对齐
+    	ImageProjection();
+ 		// 时间同步后的回调函数   
+      	void cloudHandler_AT128(const gnd_msgs::ground_estimate::ConstPtr& laserCloudMsg_front,
+                          const gnd_msgs::ground_estimate::ConstPtr& laserCloudMsg_rear,
+                          const gnd_msgs::ground_estimate::ConstPtr& laserCloudMsg_left,
+                          const gnd_msgs::ground_estimate::ConstPtr& laserCloudMsg_right);
+}
+
+ImageProjection::ImageProjection() : nh("~") {
+	// c++至多可以接收8个topic来做时间戳对齐
+    // 每个topic的msg都可以不一样，但要保证这些msg中要包含std_msgs/Header类型的信息
+    // 因为对齐的时候依照的数据是std_msgs/Header中的时间戳字段 (header.stamp)来完成的
+    message_filters::Subscriber<gnd_msgs::ground_estimate> subLaserCloud_front(nh,cloud_segmentation_front_,1);
+    message_filters::Subscriber<gnd_msgs::ground_estimate> subLaserCloud_rear(nh,cloud_segmentation_rear_,1);
+    message_filters::Subscriber<gnd_msgs::ground_estimate> subLaserCloud_left(nh,cloud_segmentation_left_,1);
+    message_filters::Subscriber<gnd_msgs::ground_estimate> subLaserCloud_right(nh,cloud_segmentation_right_,1);
+	
+    // 定义时间戳对齐方案：有ExactTime和ApproximateTime两种
+    //typedef sync_policies::ExactTime<....> ...
+    typedef message_filters::sync_policies::ApproximateTime<gnd_msgs::ground_estimate, 
+                                                            gnd_msgs::ground_estimate,
+                                                            gnd_msgs::ground_estimate,
+                                                            gnd_msgs::ground_estimate> SyncPolicy;
+    
+    // 将要同步的topic订阅器传递给同步器
+    // 同步策略这里设置缓存大小为10，即最大缓存消息数量为10。
+    // 这样即使在同步过程中，有些消息到达的顺序不同，也能通过缓存来找到最匹配的数据
+    message_filters::Synchronizer<SyncPolicy> sync(SyncPolicy(10), subLaserCloud_front, 
+                                                                   subLaserCloud_rear, 
+                                                                   subLaserCloud_left, 
+                                                                   subLaserCloud_right);
+    // 设置时间同步后的回调函数
+    sync.registerCallback(boost::bind(&ImageProjection::cloudHandler_AT128,this,_1,_2,_3,_4));
+}
+
+int main(int argc, char** argv) {
+  ros::init(argc, argv, "pago_loam");
+
+  ImageProjection IP;
+
+  ros::spin();
+  return 0;
+}
+```
+
+
+
+
+
 # 三、ROS图像处理工具
 
 ## 1. cv_bridge
