@@ -1118,3 +1118,150 @@ int main() {
    ```
 
    
+
+## 2. 读取json
+
+nlohmann的教程：
+
+[git](https://github.com/nlohmann/json?tab=readme-ov-file)上也有详细使用教程
+
+https://www.cnblogs.com/linuxAndMcu/p/14503341.html
+
+### 下载使用nlohmann/json
+
+从git上将[nlohmann目录](https://github.com/nlohmann/json/tree/develop/include)拷贝到新建工程目录的include目录下，然后在c++代码中加入头文件就可以用了
+
+```c++
+#include "nlohmann/json.hpp"
+// 创建空的 JSON 数组
+nlohmann::json json_array = nlohmann::json::array();
+```
+
+### 一个例子：读取并输出所有键值
+
+- 目录结构：
+
+  ```
+  .
+  ├── build
+  │   ├── ...
+  │   └── test
+  ├── CMakeLists.txt
+  ├── files
+  │   └── test.json
+  ├── include
+  │   └── nlohmann
+  └── src
+      └── test.cpp
+  ```
+
+- CMakeLists.txt
+
+  ```cmake
+  cmake_minimum_required(VERSION 2.8)
+  
+  project(test)
+  include_directories(${PROJECT_SOURCE_DIR}/include)
+  add_executable(test src/test.cpp)
+  ```
+
+- test.json
+
+  ```json
+  {
+    "output": {
+      "width": 720,
+      "height": 1080,
+      "frameRate": 20,
+      "crf": 31
+    },
+    "tracks": [
+      {
+        "name": "t1",
+        "pieces": [
+          {
+            "file": "x.mp4",
+            "startTime": 2,
+            "endTime": 6
+          },
+          {
+            "file": "y.mp4",
+            "startTime": 9,
+            "endTime": 13
+          }
+        ]
+      },
+      {
+        "name": "t2",
+        "pieces": [
+          {
+            "file": "z.mp4",
+            "startTime": 0,
+            "endTime": 10
+          }
+        ]
+      }
+    ]
+  }
+  ```
+
+- test.cpp
+
+  ```c++
+  #include "nlohmann/json.hpp"
+  #include <fstream>
+  #include <iostream>
+  
+  int main() {
+      // 打开json文件
+      std::string fileName = "../files/test.json";
+      std::ifstream jfile(fileName);
+      // 读取该json文件信息
+      nlohmann::json jsonData;
+      jfile >> jsonData;
+  
+      // 打印output对象【也可以用j["output"].at("width")】
+      std::cout << jsonData.at("output").at("width") << std::endl;
+      std::cout << jsonData.at("output").at("height") << std::endl;
+      std::cout << jsonData.at("output").at("frameRate") << std::endl;
+      std::cout << jsonData.at("output").at("crf") << std::endl;
+      // 打印tracks数组对象
+      for(int i=0; i<jsonData["tracks"].size(); i++) {
+          std::cout << jsonData["tracks"][i].at("name") << std::endl;
+  
+          // 打印pieces子数组对象
+          nlohmann::json jsonData2 = jsonData["tracks"][i].at("pieces");
+          for(int k=0; k<jsonData2.size(); k++) {
+              std::cout << jsonData2[k].at("file") << std::endl;
+              std::cout << jsonData2[k].at("startTime") << std::endl;
+              std::cout << jsonData2[k].at("endTime") << std::endl;
+          }
+      }
+  
+      return 0;
+  }
+  ```
+
+  
+
+### 保存数组
+
+```json
+"extrinsic_param": {
+        "rotation": [
+            0.07842524008213057,
+            0.11624746577306232,
+            -1.7437338500913855
+        ],
+```
+
+使用vector来保存：
+
+```c++
+nlohmann::json jsonData2 = jsonData["lidars"][i].at("extrinsic_param");
+std::vector<double> pose;
+for(auto& element: jsonData2.at("rotation")) {
+    pose.push_back(element);
+}
+```
+

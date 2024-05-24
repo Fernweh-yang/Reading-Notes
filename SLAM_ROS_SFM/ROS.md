@@ -3230,65 +3230,99 @@ int main(int argc, char** argv){
   }
   ```
 
+
+## 点云数据处理
+
+### 点云基本信息
+
+点云是某个坐标系下的点的集合。（就像天上的白云，颜色是白色，并且是由许多小水滴、小晶体等混合物组成的，每个组成该混合物的小个体便是“白云”的“点”）
+
+点包含了数据信息，包括三维坐标 X，Y，Z、颜色、强度值等等。
+
+- 点云在组成特点上分为两种，一种是有序点云，一种是无序点云。
+
+  - 有序点云：一般由深度图还原的点云，有序点云按照图方阵一行一行排列，从左上角到右下角。不过这其中会存在一些无效点，在很多情况下是无法获取有序点云的。
+
+  - 无序点云：无序点云就是其中的点的集合，点排列之间没有任何顺序，点的顺序交换后没有任何影响。是比较普遍的点云形式，有序点云也可看做无序点云来处理。处理无序点云只考量空间坐标和颜色值。
+
+- 传感器信息可以用`rosmsg list`找到:
+
+  ```
+  sensor_msgs/LaserEcho
+  sensor_msgs/LaserScan
+  sensor_msgs/MagneticField
+  sensor_msgs/MultiDOFJointState
+  sensor_msgs/MultiEchoLaserScan
+  sensor_msgs/NavSatFix
+  sensor_msgs/NavSatStatus
+  sensor_msgs/PointCloud
+  sensor_msgs/PointCloud2
+  sensor_msgs/PointField
+  
+  ```
+
+- 其中点云信息主要用pointcloud2，查看：`rosmsg show sensor_msgs/PointCloud2`
+
+  ```yaml
+  ---
+  //这个消息保存了一个n维点的集合point数据存储为二进制blob，其布局由fields数组的内容。
+  //点云数据可以是二维(像图像一样)或一维的(无序)
+  header: 
+    seq: 240			//序列ID
+    stamp: 
+      secs: 107
+      nsecs: 930000000
+    frame_id: "base_laser_link"
+  height: 1		//点云的二维结构。如果云是无序的，则height为1，width为点云的长度。
+  width: 178
+  fields: 		//描述二进制数据blob中的通道及其布局
+    - 
+      name: "x"
+      offset: 0
+      datatype: 7			//uint8 INT8    = 1
+      count: 1			//uint8 UINT8   = 2
+  						//uint8 INT16   = 3
+  						//uint8 UINT16  = 4
+  						//uint8 INT32   = 5
+  						//uint8 UINT32  = 6
+  						//uint8 FLOAT32 = 7			datatype：7		
+    - 					//uint8 FLOAT64 = 8
+      name: "y"
+      offset: 4
+      datatype: 7
+      count: 1
+    - 
+      name: "z"
+      offset: 8
+      datatype: 7
+      count: 1
+    - 
+      name: "index"			//字段名
+      offset: 12			   //偏移量
+      datatype: 5			  //数据类型枚举
+      count: 1			 //字段中有多少个元素
+  is_bigendian: False		//是否为大端格式？
+  point_step: 16		   //点长度(单位为字节)
+  row_step: 2848		   //行长度(单位为字节)
+  data: [...........................] //很多数据，此处省略，实际点数据，大小为(row_step*height)
+  is_dense: False		//如果没有无效点，则为真，否则为假
+  ```
+
   
 
-一个例子：
+### ROS与PCL点云数据的转换
 
-```c++
-#include "gnd_msgs/ground_estimate.h"
-class ImagePRojection{
-    private:
-    	...
-    public:
-        // 在类的构造函数中完成时间戳的对齐
-    	ImageProjection();
- 		// 时间同步后的回调函数   
-      	void cloudHandler_AT128(const gnd_msgs::ground_estimate::ConstPtr& laserCloudMsg_front,
-                          const gnd_msgs::ground_estimate::ConstPtr& laserCloudMsg_rear,
-                          const gnd_msgs::ground_estimate::ConstPtr& laserCloudMsg_left,
-                          const gnd_msgs::ground_estimate::ConstPtr& laserCloudMsg_right);
-}
+[参考](https://cloud.tencent.com/developer/article/1692529)
 
-ImageProjection::ImageProjection() : nh("~") {
-	// c++至多可以接收8个topic来做时间戳对齐
-    // 每个topic的msg都可以不一样，但要保证这些msg中要包含std_msgs/Header类型的信息
-    // 因为对齐的时候依照的数据是std_msgs/Header中的时间戳字段 (header.stamp)来完成的
-    message_filters::Subscriber<gnd_msgs::ground_estimate> subLaserCloud_front(nh,cloud_segmentation_front_,1);
-    message_filters::Subscriber<gnd_msgs::ground_estimate> subLaserCloud_rear(nh,cloud_segmentation_rear_,1);
-    message_filters::Subscriber<gnd_msgs::ground_estimate> subLaserCloud_left(nh,cloud_segmentation_left_,1);
-    message_filters::Subscriber<gnd_msgs::ground_estimate> subLaserCloud_right(nh,cloud_segmentation_right_,1);
-	
-    // 定义时间戳对齐方案：有ExactTime和ApproximateTime两种
-    //typedef sync_policies::ExactTime<....> ...
-    typedef message_filters::sync_policies::ApproximateTime<gnd_msgs::ground_estimate, 
-                                                            gnd_msgs::ground_estimate,
-                                                            gnd_msgs::ground_estimate,
-                                                            gnd_msgs::ground_estimate> SyncPolicy;
-    
-    // 将要同步的topic订阅器传递给同步器
-    // 同步策略这里设置缓存大小为10，即最大缓存消息数量为10。
-    // 这样即使在同步过程中，有些消息到达的顺序不同，也能通过缓存来找到最匹配的数据
-    message_filters::Synchronizer<SyncPolicy> sync(SyncPolicy(10), subLaserCloud_front, 
-                                                                   subLaserCloud_rear, 
-                                                                   subLaserCloud_left, 
-                                                                   subLaserCloud_right);
-    // 设置时间同步后的回调函数
-    sync.registerCallback(boost::bind(&ImageProjection::cloudHandler_AT128,this,_1,_2,_3,_4));
-}
+https://blog.csdn.net/luyuhangGray/article/details/122634340
 
-int main(int argc, char** argv) {
-  ros::init(argc, argv, "pago_loam");
+### 点云数据的坐标系转换
 
-  ImageProjection IP;
+[参考](https://blog.csdn.net/weixin_43807148/article/details/114895377)
 
-  ros::spin();
-  return 0;
-}
-```
+[参考2](https://blog.csdn.net/u014072827/article/details/111307665)
 
-
-
-
+https://zhuanlan.zhihu.com/p/373598208
 
 # 三、ROS图像处理工具
 
