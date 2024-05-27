@@ -609,4 +609,12 @@ type+subject
      cz init
      ```
 
-  2. 
+  2. 添加注释:
+
+     ```
+     git add .
+     cz commit
+     git push
+     ```
+
+     
