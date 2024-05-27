@@ -110,3 +110,63 @@ set ignorecase        "搜索时忽略大小写
 set confirm           "没有保存或文件只读时弹出确认
 ```
 
+# VIM Tutor
+
+[官方学习文档](https://vimhelp.org/usr_01.txt.html#vimtutor)，下载vim后，在shell中输入`vimtutor即可打开`
+
+## 1. 基本操作
+
+- **Moving the cursor**
+  - 基本移动：h, j, k, l 《-》左下上右
+  - 通过motion: w/e来移动：数字+w/e
+    - 2w：移动光标到到当前单词后面第二个(从当前单词开始数)单词的前面
+    - 3e：移动光标到当前单签后面第三个(从当前单词开始数)单词的末尾
+
+- **Exiting Vim**
+  1. `<esc>`进入normal mode
+  2. 输入`:q! <enter>`丢弃一切退出
+  3. 输入`:wq <enter>`保存后退出
+  4. `vimtutor <enter>`返回教程
+- **Undo command**
+  - 取消上一个执行的命令：normal model下小写的 `u`
+  - 恢复整行的修改：normal model下大写的`U`
+  - 取消undo：按住`<ctrl> +R `，按了几下u，就可以按几下R
+
+- **Text Editing: Deletion**
+
+  - 单个字符删除：光标移动到要删除的字符前，normal mode下按`x`删除
+
+  - 整行删除：`dd`
+
+    - `4dd`：删除包括当前行在内的下面4行
+
+  - 通过operator + motion删除:
+
+    格式是：
+
+    `operator [number] motion`
+
+    - operator - is what to do, such as  d  for delete
+    - [number] - is an optional count to repeat the motion
+    - motion   - moves over the text to operate on, such as  w (word),  $ (to the end of line), etc.
+
+    例子：
+
+    - `dw`删除到下个单词前，两单词中间所有的空格也会被删除。
+    - `de`删除到当前单词后，两单词中间所有的空格得到保留。
+    - `d$`删除到该行的最后。
+    - 同样的，`d2w/d2e`就是删除2个单词
+
+  - 整行删除：`dd`
+
+    - `4dd`：删除包括当前行在内的下面4行
+
+- **Text Editing: Insertion**
+
+  在要输入的地方按`i`
+
+- **Text Editing: Appending**
+
+  随便光标在哪，按大写的`A`，光标都会来到这行的末尾并进入insert mode
+
+看完lesson2.0
