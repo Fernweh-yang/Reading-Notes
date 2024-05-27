@@ -859,18 +859,61 @@ Docker 官方维护的一个公共仓库 [Docker Hub](https://hub.docker.com)，
 
 ## 与宿主机进行资源交互
 
-所有容器都可以通过挂载 "auto_calib_data" 卷来访问宿主机上的当前工作目录中的 "data" 子目录：
+- **创建卷并绑定宿主机目录**:
 
-`docker volume create -d local --opt type=none --opt o=bind --opt device=$PWD/data auto_calib_data`
+  所有容器都可以通过挂载 "auto_calib_data" 卷来访问宿主机上的当前工作目录中的 "data" 子目录：
 
-- `docker volume create` 是用于创建 Docker 卷的命令。
-- `-d local` 指定了使用本地驱动程序创建卷。
-- `--opt type=none` 表示不使用任何类型的特殊卷。
-- `--opt o=bind` 指定了挂载选项，将卷与宿主机上的目录进行绑定。
-- `--opt device=$PWD/data` 指定了要绑定的目录，这里使用了宿主机上的当前工作目录中的 "data" 子目录。
-- "auto_calib_data" 是要创建的卷的名称。
+  ```
+  docker volume create -d local --opt type=none --opt o=bind --opt device=$PWD/data auto_calib_data
+  ```
 
-连上后宿主和容器对该地址的数据进行修改后，另一边也一样跟着修改，因为他们看到的数据就是同一个。
+  - `docker volume create` 是用于创建 Docker 卷的命令。
+
+  - `-d local` 指定了使用本地驱动程序创建卷。
+
+  - `--opt type=none` 表示不使用任何类型的特殊卷。
+
+  - `--opt o=bind` 指定了挂载选项，将卷与宿主机上的目录进行绑定。
+
+  - `--opt device=$PWD/data` 指定了要绑定的目录，这里使用了宿主机上的当前工作目录中的 "data" 子目录。
+
+  - "auto_calib_data" 是要创建的卷的名称。
+
+- **在启动容器时使用该卷**:
+
+  ```
+  docker run -d --name my_container -v auto_calib_data:/app/data my_image
+  ```
+
+  连上后宿主和容器对该地址的数据进行修改后，另一边也一样跟着修改，因为他们看到的数据就是同一个。
+
+- **用docker-compose连接卷**
+
+  ```shell
+  volumes:
+  	- ... 
+      - auto_calib_data:/workspace/src/xxProject/samples
+  
+  # 这种法法需要在compose中额外声明一下
+  volumes:
+    auto_calib_data:
+      name: auto_calib_data
+      external: true
+  ```
+
+  其实也可以不先docker volume挂载卷，直接：
+
+  ```
+  volumes:
+  	- ... 
+      - ../data:/workspace/src/xxProject/samples
+  ```
+
+- **查看本地挂载的所有docker卷**
+
+  ```
+  docker volume ls
+  ```
 
 # Dockerfile
 

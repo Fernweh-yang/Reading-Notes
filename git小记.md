@@ -50,6 +50,14 @@
    
 - windows下更新git 版本
    - git update-git-for-windows
+   
+- 如果在公司无法用ssh，只能用Https来clone，又不想每次都输入密码可以：
+
+   ```
+   git config --local credential.helper store
+   ```
+
+   然后在下次git操作时，输入一遍用户名密码就可以了。
 
 # 二、基本操作
 
@@ -576,4 +584,29 @@ type+subject
 
   
 
-  
+
+## 3.3 使用commitizen来格式化提交
+
+[git仓库](https://github.com/commitizen-tools/commitizen?tab=readme-ov-file)
+
+- 下载：
+
+  ```shell
+  pip install --user -U Commitizen
+  ```
+
+  如果报warning说`/home/hx/.local/bin`不在地址内，就需要在`.zshrc`中加入：
+
+  ```
+  export PATH="$PATH:/home/hx/.local/bin"
+  ```
+
+- 使用：
+
+  1. 在每个工程(工程的git目录下)开始时初始化：
+
+     ```
+     cz init
+     ```
+
+  2. 
