@@ -170,43 +170,90 @@ $$
 $$
 
 - $\mathbf{p}_w$：世界坐标系下的p点坐标
-
 - $\mathbf{p}_b$：车辆坐标系下的p点坐标
+- $\mathbf{R}_{wb},\mathbf{t}_{wb},\mathbf{T}_{wb}$​：是**向量之间的坐标变换**，是为了得到车辆坐标下的点在世界坐标下的坐标。所以这些位姿变换不是1.1.1的坐标轴(基)之间的变换，而是1.1.2/3的$A^{-1}_{bw}$的向量变换。
 
-- $\mathbf{R}_{wb},\mathbf{t}_{wb},\mathbf{T}_{wb}$：是**向量之间的坐标变换**，不是坐标轴(基)之间的变换
+### 1.1 基/向量/矩阵变换
 
-  坐标变换和基变换互为逆，如下所示式1为坐标变换，式2为基变换
+- 假设有两个坐标系：
 
-基变换
-$$
-\begin{align}
-AX'=X \tag{1.1}\\
-X'=A^{-1}X \tag{1.2}
-\end{align}
-$$
+  - 小蓝 X 坐标系：$\hat{i},\ \hat{j}$
+  - 小粉 X‘ 坐标系：$\hat{b_1},\ \hat{b_2}$
+  - 小粉坐标系的基：$\hat{b_1},\ \hat{b_2}$在自身看来是$\left [\begin{array}{cccc}
+    1  \\
+    0  \\
+    \end{array}\right]\left [\begin{array}{cccc}
+    0  \\
+    1   \\
+    \end{array}\right]$在小蓝看来是$\left [\begin{array}{cccc}
+    3  \\
+    1   \\
+    \end{array}\right]\left [\begin{array}{cccc}
+    1  \\
+    2   \\
+    \end{array}\right]$​。
 
-- X'是以基向量$\left [\begin{array}{cccc}
-  3  \\
-  1   \\
-  \end{array}\right]\left [\begin{array}{cccc}
-  1  \\
-  2   \\
-  \end{array}\right]$为坐标的向量
+- **基**变换
 
-- X是以基向量$\left [\begin{array}{cccc}
-  1  \\
-  0  \\
-  \end{array}\right]\left [\begin{array}{cccc}
-  0  \\
-  1   \\
-  \end{array}\right]$为坐标的向量
-
-- $A=\left [\begin{array}{cccc}
+  从小蓝到小粉的变换矩阵是$A_{蓝粉}=\left [\begin{array}{cccc}
   3 & 1 \\
   1 & 2  \\
-  \end{array}\right]$
+  \end{array}\right]$​
+  $$
+  \begin{align}
+  X'&=AX\\
+  X'&=\left [\begin{array}{cccc}
+  3 & 1 \\
+  1 & 2  \\
+  \end{array}\right]\left [\begin{array}{cccc}
+  1 & 0 \\
+  0 & 1  \\
+  \end{array}\right]
+  \end{align}\tag{1.1.1}
+  $$
+  
 
-- 如果有个在$\left [\begin{array}{cccc}
+- **向量**从小粉 X‘ --> 小蓝 X 
+
+  小粉坐标系下的$P'=\left [\begin{array}{cccc}
+  -1  \\
+  2  \\
+  \end{array}\right]$在小蓝坐标系下的P应该是：
+  $$
+  \begin{align}
+  P&=AP'\\
+  P&=\left [\begin{array}{cccc}
+  3 & 1 \\
+  1 & 2  \\
+  \end{array}\right]\left [\begin{array}{cccc}
+  -1  \\
+  2  \\
+  \end{array}\right]
+  \end{align}\tag{1.1.2}
+  $$
+
+- **向量**从小蓝 X --> 小粉 X‘ 
+
+  小蓝坐标系下的$P=\left [\begin{array}{cccc}
+  3  \\
+  2  \\
+  \end{array}\right]$在小粉坐标系下的P'应该是：
+  $$
+  \begin{align}
+  P'&=A^{-1}P\\
+  P'&=\left [\begin{array}{cccc}
+  3 & 1 \\
+  1 & 2  \\
+  \end{array}\right]^{-1}\left [\begin{array}{cccc}
+  3  \\
+  2  \\
+  \end{array}\right]
+  \end{align}\tag{1.1.3}
+  $$
+
+- **矩阵**从小蓝 X --> 小粉 X‘ 
+
+  如果有个在$\left [\begin{array}{cccc}
   1  \\
   0  \\
   \end{array}\right]\left [\begin{array}{cccc}
@@ -220,11 +267,11 @@ $$
   2   \\
   \end{array}\right]$下的向量X'经过这个线性变换M会变成什么样：
   $$
-  X_{new}'=A^{-1}MAX'
+  M'=A^{-1}MA\tag{1.1.4}
   $$
 
   1. 需要先$AX'$将向量X'转为和线性变换M一样的坐标系，再进行M变换
-  2. 最后结果再由$A^{-1}$转为原有基向量
+  1. 最后结果再由$A^{-1}$转为原有基向量
 
 ## 2. 运动学
 
