@@ -40,7 +40,9 @@
   - `\dot{x}`$\dot{x}$
   - `\ddot{x}`$\ddot{x}$
 
-- 
+- 头上一横
+
+  - `\overline`：$\overline{x}$
 
 # 括号相关
 
