@@ -471,6 +471,13 @@ $$
 
 2. 运行:
 
+   它提供的image里没装gdb，如果想要debug，需要现在容器内安装gdb：
+
+   ```
+   sudo apt-get update
+   sudo apt-get install geb
+   ```
+
    - 对于激光雷达：Livox Avia
 
      数据集：[google drive](https://drive.google.com/drive/folders/1CGYEJ9-wWjr8INyan6q1BZz_5VtGB-fP?usp=sharing)

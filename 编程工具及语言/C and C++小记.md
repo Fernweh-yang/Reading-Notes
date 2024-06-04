@@ -540,7 +540,7 @@ p40
     
     // 指针传递还可以用于传递数组,下面两种效果是一样的
         1. 形式参数是一个指针：
-    	void myFunction(int *param{}
+    	void myFunction(int *param)
         2. 形式参数是一个数组：
         void myFunction(int param[])
         //调用时，不用传地址，直接传数组就行：
@@ -1085,7 +1085,105 @@ int main() {
     }
     ```
 
-    
+
+## 11. 宏
+
+宏（Macro）是C/C++预处理器的一部分，它允许在代码中定义常量、简单的代码块替换、参数化代码替换等。宏在代码编译前会由预处理器进行展开和替换。
+
+### 用宏的优点：
+
+1. **代码生成**：宏允许在编译时进行代码生成，因此可以用来生成重复的代码或模板。
+
+   如下面带参数的例子，都不需要定义参数的数据类型，就保证了对不同数据类型实现相同操作
+
+2. **条件编译**：宏可以用于条件编译，根据编译器选项或其他条件选择性地包含或排除代码块。这对于实现跨平台代码或处理不同编译器的特定行为非常有用。
+
+3. **性能优化**：由于宏展开是在预处理阶段完成的，因此它们可以比函数调用更快，特别是对于简单的操作。这对于性能敏感的应用程序非常重要。
+
+### 什么时候需要宏
+
+- **定义常量**：需要在多个地方使用的常量值，例如数学常数、物理常数等。
+- **简化重复代码**：有大量重复代码时，可以通过宏定义来简化。
+- **条件编译**：需要根据不同的平台、编译器或配置编译不同的代码时。
+- **代码参数化**：需要对一些简单的代码进行参数化处理时，例如数学运算等。
+
+### 简单例子：
+
+- 常量替换
+
+  ```
+  #define PI 3.14159
+  ```
+
+- 代码块替换
+
+  ```
+  #define PRINT_HELLO std::cout << "Hello, World!" << std::endl;
+  ```
+
+- 带参数的代码块替换
+
+  ```
+  #define SQUARE(x) ((x) * (x))
+  ```
+
+### 复杂例子：
+
+宏要写在一行内，但如果很复杂就可以用`\`来换行增加代码的可阅读性。
+
+```c++
+// MTK: Matrix toolkit?
+#define MTK_BUILD_MANIFOLD(name, entries) \
+struct name { \
+	typedef name self; \
+    // 成员变量定义
+	std::vector<std::pair<int, int> > S2_state;\
+	std::vector<std::pair<int, int> > SO3_state;\
+	std::vector<std::pair<std::pair<int, int>, int> > vect_state;\
+    // 这里又是一个宏
+	MTK_SUBVARLIST(entries, S2_state, SO3_state) \
+    // 构造函数定义
+	name ( \
+		MTK_TRANSFORM_COMMA(MTK_CONSTRUCTOR_ARG, entries) \
+		) : \
+		MTK_TRANSFORM_COMMA(MTK_CONSTRUCTOR_COPY, entries) {}\
+	// 成员函数定义
+    int getDOF() const { return DOF; } \
+	void boxplus(const MTK::vectview<const scalar, DOF> & __vec, scalar __scale = 1 ) { \
+		MTK_TRANSFORM(MTK_BOXPLUS, entries)\
+	} \
+	void oplus(const MTK::vectview<const scalar, DIM> & __vec, scalar __scale = 1 ) { \
+		MTK_TRANSFORM(MTK_OPLUS, entries)\
+	} \
+	void boxminus(MTK::vectview<scalar,DOF> __res, const name& __oth) const { \
+		MTK_TRANSFORM(MTK_BOXMINUS, entries)\
+	} \
+	friend std::ostream& operator<<(std::ostream& __os, const name& __var){ \
+		return __os MTK_TRANSFORM(MTK_OSTREAM, entries); \
+	} \
+	void build_S2_state(){\
+		MTK_TRANSFORM(MTK_S2_state, entries)\
+	}\
+	void build_vect_state(){\
+		MTK_TRANSFORM(MTK_vect_state, entries)\
+	}\
+	void build_SO3_state(){\
+		MTK_TRANSFORM(MTK_SO3_state, entries)\
+	}\
+	void S2_hat(Eigen::Matrix<scalar, 3, 3> &res, int idx) {\
+		MTK_TRANSFORM(MTK_S2_hat, entries)\
+	}\
+	void S2_Nx_yy(Eigen::Matrix<scalar, 2, 3> &res, int idx) {\
+		MTK_TRANSFORM(MTK_S2_Nx_yy, entries)\
+	}\
+	void S2_Mx(Eigen::Matrix<scalar, 3, 2> &res, Eigen::Matrix<scalar, 2, 1> dx, int idx) {\
+		MTK_TRANSFORM(MTK_S2_Mx, entries)\
+	}\
+	friend std::istream& operator>>(std::istream& __is, name& __var){ \
+		return __is MTK_TRANSFORM(MTK_ISTREAM, entries); \
+	} \
+};
+```
 
 # C++小功能
 
