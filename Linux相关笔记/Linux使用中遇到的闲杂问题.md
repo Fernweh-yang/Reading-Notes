@@ -156,3 +156,76 @@ terminator:`sudo apt-get install terminator`
 - 打开布局：win + t
 - 切换布局：win+t -> 1/2/3
 - 占多块：win+t -> 按顺序按想要的区域字母
+
+# linux组
+
+**组** 是指一组具有相同特征或权限的用户或进程的集合。组可以用于管理用户对系统资源的访问权限，也可以用于将用户组织到逻辑组中以便更轻松地进行管理。
+
+## 查看当前组
+
+使用命令`cat /etc/group`查看所有的组，包含当前用户不属于的组。
+
+使用命令`groups`查看当前用户属于哪些组，也可以用`id`命令
+
+```
+yang adm cdrom sudo dip plugdev lpadmin lxd sambashare realtime
+```
+
+各个组的含义为：
+
+- adm
+
+  `adm` 组是系统管理员组，成员拥有对系统进行管理的权限，包括：
+
+  - 添加和删除用户
+  - 修改用户密码
+  - 管理组
+  - 修改系统配置
+  - 安装和卸载软件
+
+- cdrom
+
+  `cdrom` 组是 CD-ROM 驱动程序组，成员可以使用 CD-ROM 驱动程序。
+
+- sudo
+
+  `sudo` 组是允许用户以管理员身份运行命令的组，成员可以使用 `sudo` 命令以管理员身份运行任何命令
+
+- dip
+
+  `dip` 组是直接 I/O 权限组，成员可以使用直接 I/O 访问硬件设备。
+
+- plugdev
+
+  `plugdev` 组是可插拔设备组，成员可以使用可插拔设备，例如 USB 设备。
+
+- lpadmin
+
+  `lpadmin` 组是打印机管理员组，成员可以管理打印机。
+
+- lxd
+
+  `lxd` 组是 LXD 容器管理组，成员可以使用 LXD 命令管理容器。
+
+- sambashare
+
+  `sambashare` 组是 Samba 共享组，成员可以使用 Samba 共享文件和打印机。
+
+- realtime
+
+  `realtime` 组是实时任务组，成员可以运行实时任务。
+
+## 将当前用户添加到某个组
+
+将yang添加到sudo组
+
+```
+sudo usermod -aG sudo yang
+```
+
+也可以用：
+
+```
+sudo gpasswd -a yang sudo
+```
+

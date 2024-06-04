@@ -40,11 +40,17 @@
 
 - 构建image
 
+  执行`.`当前文件夹下的dockerfile，构建名为sad:v1的image
+
   ```shell
   docker build -t sad:v1 .
   ```
 
-- 进入容器
+- 构建容器
+
+  该脚本文件中定义好了docker run ....各种环境变量、卷等信息。
+
+  **如果机子没有gpu记得把--gpu all删掉**
 
   ```shell
   ./docker/docker_run.sh
@@ -52,12 +58,15 @@
 
 - 在容器内编译运行
 
+  如果cpu核数不够就用make -j4
+  
   ```shell
   cd ./thirdparty/g2o
   mkdir build
   cd build
   cmake ..
   make -j8
+  make install
   cd /sad
   mkdir build
   cd build
@@ -212,7 +221,6 @@ $$
   \end{align}\tag{1.1.1}
   $$
   
-
 - **向量**从小粉 X‘ --> 小蓝 X 
 
   小粉坐标系下的$P'=\left [\begin{array}{cccc}

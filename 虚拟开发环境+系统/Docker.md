@@ -44,7 +44,25 @@
   sudo docker run hello-world
   ```
 
-  
+- docker命令不再输入sudo
+
+  1. 将当前用户加入组docker：
+
+     ```bash
+     sudo gpasswd -a ${USER} docker
+     ```
+
+  2. 重启docker服务：
+
+     ```shell
+     sudo systemctl restart docker
+     ```
+
+  3. 重新启动服务器
+
+     ```shell
+     shutdown -r now
+     ```
 
 ## 卸载
 
