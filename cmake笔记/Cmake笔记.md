@@ -1264,3 +1264,118 @@ all:
     @echo "Current directory is: $(CURRENT_DIRECTORY)"
 ```
 
+
+
+# CMake杂记
+
+## add_definitions为编译器添加预处理器定义或编译选项
+
+- 例子1：
+
+  ```cmake
+  add_definitions(-DROOT_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/\")
+  ```
+
+  - `-D` 标签用于为c/c++预处理器创建一个宏，在这里是创建了一个名为ROOT_DIR的宏。
+  - `${CMAKE_CURRENT_SOURCE_DIR}`：指向CMakeLists.txt 文件所在的文件夹路径。
+
+  - 作用：
+
+    在c++代码中就可以用这个宏了：
+
+    ```c++
+    #include <iostream>
+    int main() {
+        std::cout << "Root directory: " << ROOT_DIR << std::endl;
+        return 0;
+    }
+    ```
+
+- 例子2：
+
+  ```cmake
+  # 添加定义 DEBUG 宏
+  add_definitions(-DDEBUG)
+  ```
+
+  - 定义一个名为DEBUG
+
+  - 作用：
+
+    在c++中判断是否有定义DEBUG这么一个宏：
+
+    ```c++
+    #include <iostream>
+    
+    int main() {
+    #ifdef DEBUG
+        std::cout << "Debug mode" << std::endl;
+    #else
+        std::cout << "Release mode" << std::endl;
+    #endif
+        return 0;
+    }
+    ```
+
+    
+
+## set(xx "xx")设置构建模式
+
+- 用法：
+
+  设置构建类型:
+
+  ```cmake
+  set(CMAKE_BUILD_TYPE "xx)
+  ```
+
+  设置编译器标志：
+
+  ```cmake
+  set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} xxx xxx")
+  ```
+
+- 例子：
+
+  ```cmake
+  # 设置构建类型
+  set(CMAKE_BUILD_TYPE "Debug")
+  
+  # 为所有模式设置C++编译器标签
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14 -pthread -std=c++0x -fexceptions")
+  
+  # 为调试模式设置额外的 C++ 编译器标志
+  set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -Wall -O0 -g")
+  ```
+
+  - 在除了debug模式下都会用第一个标志，debug模式下用第二个标志
+  - 各个标签的功能
+    - `-std=c++14`：使用 C++14 标准。
+    - `-pthread`：启用多线程支持。
+    - `-fexceptions`：启用异常处理。
+    - `-Wall`：启用所有警告。
+    - `-O0`：禁用优化。
+    - `-g`：生成调试信息。
+
+- 常见的构建类型：
+
+  **Debug**
+
+  - **描述**：用于调试，包含调试信息，禁用优化。
+  - **编译标志**：通常包括 `-g`（生成调试信息）和 `-O0`（禁用优化）。
+
+  **Release**
+
+  - **描述**：用于发布，启用优化，去除调试信息。
+  - **编译标志**：通常包括 `-O3` 或 `-O2`（启用优化）和 `-DNDEBUG`（禁用断言）。
+
+  **RelWithDebInfo**（Release with Debug Information）
+
+  - **描述**：用于发布，同时保留调试信息，以便在发布版本中进行调试。
+  - **编译标志**：通常包括 `-O2`（启用优化）和 `-g`（生成调试信息）。
+
+  **MinSizeRel**（Minimum Size Release）
+
+  - **描述**：用于发布，目标是最小化生成的可执行文件尺寸。
+  - **编译标志**：通常包括 `-Os`（优化代码以减小尺寸）和 `-DNDEBUG`（禁用断言）。
+

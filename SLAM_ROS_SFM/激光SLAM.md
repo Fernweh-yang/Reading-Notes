@@ -409,6 +409,86 @@ $$
 
 ## Fast-LIO2
 
+### 代码安装
+
+在docker中运行
+
+1. 创建脚本
+
+   ```
+   touch <your_custom_name>.sh
+   ```
+
+2. 在脚本中填入
+
+   ```sh
+   #!/bin/bash
+   mkdir data
+   # Script to run ROS Kinetic with GUI support in Docker
+   
+   # Allow X server to be accessed from the local machine
+   xhost +local:
+   
+   # Container name
+   CONTAINER_NAME="fastlio2"
+   
+   # Run the Docker container
+   docker run -itd \
+     --name=$CONTAINER_NAME \
+     --user mars_ugv \
+     --network host \
+     --ipc=host \
+     -v /home/$USER/data:/home/mars_ugv/data \
+     --privileged \
+     --env="QT_X11_NO_MITSHM=1" \
+     --volume="/etc/localtime:/etc/localtime:ro" \
+     -v /dev/bus/usb:/dev/bus/usb \
+     --device=/dev/dri \
+     --group-add video \
+     -v /tmp/.X11-unix:/tmp/.X11-unix \
+     --env="DISPLAY=$DISPLAY" \
+     kenny0407/marslab_fastlio2:latest \
+     /bin/bash
+   ```
+
+3. 给予权限
+
+   ```
+   sudo chmod +x <your_custom_name>.sh
+   ```
+
+4. 执行脚本
+
+   ```
+   ./<your_custom_name>.sh
+   ```
+
+### 代码运行
+
+1. 下载数据集
+
+   把rosbag文件峰哪个如上面创建的data文件夹内
+
+2. 运行:
+
+   - 对于激光雷达：Livox Avia
+
+     数据集：[google drive](https://drive.google.com/drive/folders/1CGYEJ9-wWjr8INyan6q1BZz_5VtGB-fP?usp=sharing)
+
+     ```
+     roslaunch fast_lio mapping_avia.launch
+     rosbag play YOUR_DOWNLOADED.bag
+     ```
+
+   - 对于激光雷达：Velodyne HDL-32E 
+
+     作者提供的[Rosbag Files](https://drive.google.com/drive/folders/1blQJuAB4S80NwZmpM6oALyHWvBljPSOE?usp=sharing) 和 [a python script](https://drive.google.com/file/d/1QC9IRBv2_-cgo_AEvL62E1ml1IL9ht6J/view?usp=sharing)来生成rosbag文件：`python3 sensordata_to_rosbag_fastlio.py bin_file_dir bag_name.bag`
+
+     ```
+     roslaunch fast_lio mapping_velodyne.launch
+     rosbag play YOUR_DOWNLOADED.bag
+     ```
+
 ### 主要贡献
 
 1. 使用增量KD树(ikd-tree)来维护地图，可以以很小的代价实现：最近邻搜索、地图的增量更新和动态再平衡。
@@ -448,4 +528,13 @@ $$
 
 ### Methods
 
-状态估计部分看fast-lio
+#### 状态估计
+
+状态估计算法详情如下：和fast-lio一模一样，唯独多了个将第$k$-th的scan（即$t_{k-1}-t_k$）之间的点云转换到全局坐标系的步骤：
+$$
+{}^G\bar{\mathbf{p}}_j={}^G\bar{\mathbf{T}}_{I_k}{}^I\bar{\mathbf{T}}_{L_k}{}^L\mathbf{p}_j; j=1,\cdots,m\tag{16}
+$$
+变换后的点云${}^G\bar{\mathbf{p}}_j$会被放入ikd-Tree表示的地图中去
+
+![image-20240603160152524](/home/hx/.config/Typora/typora-user-images/image-20240603160152524.png)
+
