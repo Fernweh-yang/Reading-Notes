@@ -1185,6 +1185,78 @@ struct name { \
 };
 ```
 
+## 12. 静态成员和非静态成员：
+
+- 定义：
+
+  - **静态成员:** 属于整个类，与类的**具体实例**无关。在程序运行之前分配内存，程序结束后释放内存。
+  - **非静态成员:** 属于类的**实例**，每个实例拥有一份**独立的副本**。在创建对象时分配内存，对象销毁时释放内存。
+
+- 访问方式:
+
+  - **静态成员:** 通过类名访问，例如 `ClassName::staticMemberName`。
+  - **非静态成员:** 通过对象名访问，例如 `objectName.nonStaticMemberName`。
+
+- 生命周期:
+
+  - **静态成员:** 与类同生同死，程序运行期间始终存在。
+  - **非静态成员:** 与对象同生同死，创建对象时存在，对象销毁时消失。
+
+- 访问权限:
+
+  - **静态成员:** 可以像普通成员一样设置访问权限（public、private、protected）。
+  - **非静态成员:** 通常默认具有私有访问权限，只能在类内部访问。
+
+- 用途:
+
+  - 静态成员:
+    - 用于存储与**整个类**相关的信息，例如类名、版本号等。
+    - 用于定义**全局函数**或**类工厂函数**，无需创建对象即可调用。
+    - 用于定义与**类常量**相关的数据。
+  - 非静态成员:
+    - 用于存储与**特定对象**相关的信息，例如对象状态、属性等。
+    - 用于定义对**特定对象**进行操作的成员函数。
+
+- 例子：
+
+  ```c++
+  class Person {
+  public:
+    static int count; // 静态成员变量，用于统计创建的人数
+  
+    std::string name; // 非静态成员变量，存储姓名
+    int age; // 非静态成员变量，存储年龄
+  
+    Person(const std::string& name, int age) : name(name), age(age) {
+      count++; // 访问静态成员变量
+    }
+  
+    static void printCount() { // 静态成员函数
+      std::cout << "Total persons: " << count << std::endl;
+    }
+  
+    void introduce() { // 非静态成员函数
+      std::cout << "My name is " << name << " and I am " << age << " years old." << std::endl;
+    }
+  };
+  
+  int Person::count = 0; // 静态成员变量的定义
+  
+  int main() {
+    Person p1("Alice", 30);
+    Person p2("Bob", 25);
+  
+    p1.introduce();
+    p2.introduce();
+  
+    Person::printCount(); // 访问静态成员函数
+  
+    return 0;
+  }
+  ```
+
+  
+
 # C++小功能
 
 ## 1. 按空格分割字符串
