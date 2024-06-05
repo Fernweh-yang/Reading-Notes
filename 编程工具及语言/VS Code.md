@@ -1,3 +1,28 @@
+# 常见的include地址
+
+```json
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "/opt/ros/noetic/include/",
+                "/opt/ros/noetic/share/",
+                "/usr/include/eigen3",
+                "/usr/include/pcl-1.10"
+            ],
+            "defines": [],
+            "compilerPath": "/usr/bin/gcc",
+            "cStandard": "c17",
+            "cppStandard": "gnu++14",
+            "intelliSenseMode": "linux-gcc-x64"
+        }
+    ],
+    "version": 4
+}
+```
+
 # 格式
 
 ## 缩进

@@ -1255,7 +1255,74 @@ struct name { \
   }
   ```
 
-  
+
+## 13. 回调函数
+
+一个函数可以作为另一个函数的参数。这种技术通常称为**回调函数**。在C++中，可以通过函数指针或函数对象（如lambda表达式、`std::function`）来实现。
+
+### 函数指针实现
+
+```c++
+#include <iostream>
+
+// 定义一个函数指针
+typedef void (*CallbackFunc)(int);
+
+// 一个示例回调函数
+void myCallback(int value) {
+    std::cout << "Callback called with value: " << value << std::endl;
+}
+
+// 接受函数指针作为参数的函数
+void processData(int data, CallbackFunc callback) {
+    // 执行一些处理
+    data *= 2;
+    // 调用回调函数
+    callback(data);
+}
+
+int main() {
+    // 调用带有回调函数的函数
+    processData(10, myCallback);
+    return 0;
+}
+
+```
+
+### std::function实现
+
+```c++
+#include <iostream>
+#include <functional>
+
+// 一个示例回调函数
+void myCallback(int value) {
+    std::cout << "Callback called with value: " << value << std::endl;
+}
+
+// 接受 std::function 作为参数的函数
+void processData(int data, std::function<void(int)> callback) {
+    // 执行一些处理
+    data *= 2;
+    // 调用回调函数
+    callback(data);
+}
+
+int main() {
+    // 使用函数指针
+    processData(10, myCallback);
+    
+    // 使用 lambda 表达式
+    processData(10, [](int value) {
+        std::cout << "Lambda callback called with value: " << value << std::endl;
+    });
+
+    return 0;
+}
+
+```
+
+
 
 # C++小功能
 
