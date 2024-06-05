@@ -36,6 +36,13 @@
    make -j4
    ```
 
+- 如果用的zsh可能没包含Ros库，需要
+
+  ```
+  vim ~/.zshrc
+  source /opt/ros/noetic/setup.zsh
+  ```
+
 ## 2. Docker运行
 
 - 构建image
@@ -72,6 +79,16 @@
   cd build
   cmake ..
   make -j8
+  ```
+
+- 如果遇到找不到`catkinConfig.cmake`
+
+  下载vim然后：
+
+  ```
+  vim ~/.bashrc
+  # 加入到最后
+  source /opt/ros/noetic/setup.bash
   ```
 
 ## 3. Vscode
@@ -969,6 +986,27 @@ $$
 ### 2.2 案例：IMU递推
 
 该案例使用IMU数据进行轨迹的推算，在没有其他观测数据时只能对式2.1.3进行二次积分来得到物体本身的位姿。可以发现这种积分很快就会发散，因此IMU不适合单独用来进行航迹推算。
+
+- 运行
+
+  ```
+  bin/run_imu_integration
+  ```
+
+- 运行绘图脚本绘制轨迹
+
+  ```
+  python scripts/plot_ch3_state.py data/ch3/state.txt
+  ```
+
+- 代码：
+
+  ```
+  ```
+
+  
+
+
 
 ## 3. 卫星导航
 

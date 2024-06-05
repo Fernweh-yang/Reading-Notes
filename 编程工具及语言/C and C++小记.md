@@ -475,7 +475,7 @@ p40
    - Erst wenn die aufgerufenen Funktionen ihren Wert zurückliefern, werden die Funktionen und ihre Daten vom Stack entfernt.
 
 # C++杂记
-   ## 1. 指针，引用和const
+## 指针，引用和const
 
 参见Tag1中的3，4
 
@@ -595,7 +595,7 @@ p40
 
     
 
-## 2. argc和argv
+## argc和argv
 
 ```c++
 int main(void);
@@ -610,71 +610,77 @@ int main(int argc,char *argv[])// 等于 int main(int argc,char **argv);
   - argv[2] 指向程序在命令行中执行程序名后的第二个字符串；
   - 以此类推直到argv[argc], argv[argc] 在C++中指向nullptr，在C语言中指向NULL。
 
-## 3. 模板类/函数/结构体
+##  静态成员和非静态成员：
 
-- 为什么用模板？
+- 定义：
 
-  当你发现一套操作对多个不同类型的变量操作时，为了避免重复定义多个类/函数/结构体却只是变一变数据类型，我们可以使用模板。
+  - **静态成员:** 属于整个类，与类的**具体实例**无关。在程序运行之前分配内存，程序结束后释放内存。
+  - **非静态成员:** 属于类的**实例**，每个实例拥有一份**独立的副本**。在创建对象时分配内存，对象销毁时释放内存。
 
-- 函数模板
+- 访问方式:
 
-  体现在：调用函数时传递的参数类型
+  - **静态成员:** 通过类名访问，例如 `ClassName::staticMemberName`。
+  - **非静态成员:** 通过对象名访问，例如 `objectName.nonStaticMemberName`。
+
+- 生命周期:
+
+  - **静态成员:** 与类同生同死，程序运行期间始终存在。
+  - **非静态成员:** 与对象同生同死，创建对象时存在，对象销毁时消失。
+
+- 访问权限:
+
+  - **静态成员:** 可以像普通成员一样设置访问权限（public、private、protected）。
+  - **非静态成员:** 通常默认具有私有访问权限，只能在类内部访问。
+
+- 用途:
+
+  - 静态成员:
+    - 用于存储与**整个类**相关的信息，例如类名、版本号等。
+    - 用于定义**全局函数**或**类工厂函数**，无需创建对象即可调用。
+    - 用于定义与**类常量**相关的数据。
+  - 非静态成员:
+    - 用于存储与**特定对象**相关的信息，例如对象状态、属性等。
+    - 用于定义对**特定对象**进行操作的成员函数。
+
+- 例子：
 
   ```c++
-  // ---------- 语法：----------
-  template<class 数据类型参数标识符>
-  <返回类型><函数名>(参数表)
-  {
-      函数体
-  }
+  class Person {
+  public:
+    static int count; // 静态成员变量，用于统计创建的人数
   
-  // ---------- 示例：----------
-  //下面这个函数就可以遍历输出各个数据类型的数组元素
-  template <class T>  //定义函数模板
-  void outputArray(const T *array, int count) {
-      for (int i = 0; i < count; i++)
-          cout << array[i] << " "; //如果数组元素是类的对象，需要该对象所属类重载了流插入运算符“<<”
-      cout << endl;
-  }
-  ```
-
-- 结构体模板
-
-  体现在：声明结构元素时 StackNode<类型> s
-
-  ```c++
-  // ---------- 示例：----------
-  template<class T>
-  struct StackNode
-  {
-  　　struct T data;
-  　　struct StackNode<T> *next;
+    std::string name; // 非静态成员变量，存储姓名
+    int age; // 非静态成员变量，存储年龄
+  
+    Person(const std::string& name, int age) : name(name), age(age) {
+      count++; // 访问静态成员变量
+    }
+  
+    static void printCount() { // 静态成员函数
+      std::cout << "Total persons: " << count << std::endl;
+    }
+  
+    void introduce() { // 非静态成员函数
+      std::cout << "My name is " << name << " and I am " << age << " years old." << std::endl;
+    }
   };
   
-  ```
-
-- 类模板
-
-  体现在:声明类对象时 Stack<类型> s
-
-  ```c++
-  // ---------- 示例：----------
-  template<class T>
-  class Stack
-  {
-  　public:
-  　　T pop();
-  　　bool push(T e);
-  　private:
-  　　StackNode<T> *p;
+  int Person::count = 0; // 静态成员变量的定义
+  
+  int main() {
+    Person p1("Alice", 30);
+    Person p2("Bob", 25);
+  
+    p1.introduce();
+    p2.introduce();
+  
+    Person::printCount(); // 访问静态成员函数
+  
+    return 0;
   }
-  template<class T>//类模板外的 成员函数实现
-  T Stack<T>::pop()
-  {...}
   ```
 
-
-## 4. static/inline/explicit
+## 关键字：static/inline/explicit
 
 1. **内联（inline）函数**：`inline`关键字用于建议编译器将函数的代码内联插入到调用它的地方，而不是通过函数调用进行执行。这样可以避免函数调用的开销，并且可以在一定程度上提高程序的性能。当函数定义放在头文件中时，使用`inline`关键字可以防止函数重复定义错误。
 2. **静态（static）函数**：`static`关键字用于限制函数的作用域。在命名空间或类的内部，使用`static`关键字可以将函数限定为只在当前编译单元或类内部可见。这样可以避免函数与其他编译单元或类中的同名函数冲突，并且可以实现封装。
@@ -716,7 +722,7 @@ int main(int argc,char *argv[])// 等于 int main(int argc,char **argv);
 
 
 
-## 5. 类里不同成员函数使用同一个类对象
+## 类里不同成员函数使用同一个类对象
 
 - 问题场景:
 
@@ -751,9 +757,9 @@ int main(int argc,char *argv[])// 等于 int main(int argc,char **argv);
     - 因为此时需要的是一个指针的地址
     
 
-## 6. 智能指针
+## 智能指针
 
-### 6.1 什么是智能指针
+### 什么是智能指针
 
 - 智能指针（Smart Pointer）是一种用于管理动态分配的资源（通常是内存）的 C++ 技术，旨在**简化资源的生命周期管理**，从而**减少内存泄漏和资源管理错误的风险**。
 - 智能指针是一种封装了原始指针的c++类，它们提供了自动化资源管理的功能，**避免了手动释放内存或资源的繁琐工作**。
@@ -768,7 +774,7 @@ int main(int argc,char *argv[])// 等于 int main(int argc,char **argv);
   - `std::shared_ptr`：允许多个指针共享资源所有权的智能指针，使用引用计数来管理资源的生命周期。
   - `std::weak_ptr`：用于避免循环引用和解决 `std::shared_ptr` 可能的资源泄漏问题。
 
-### 6.2 和传统指针的对比
+### 和传统指针的对比
 
 ```c++
 // 传统指针：
@@ -799,7 +805,7 @@ void UseSmartPointer()
 
 
 
-### 6.3 使用例子
+### 使用例子
 
 演示了如何使用 C++ 标准库中的 `unique_ptr` 智能指针类型将指针封装到大型对象。
 
@@ -846,7 +852,7 @@ void SmartPointerDemo2()
 
 
 
-## 7. make_unique/new/malloc
+## 创建新对象make_unique/new/malloc
 
 `std::make_unique`、`new` 和 `malloc` 都是用于分配内存的机制
 
@@ -896,7 +902,7 @@ void SmartPointerDemo2()
   free(ptr);
   ```
 
-## 8. lambda表达式
+## lambda表达式
 
 - **什么是c++的lambda表达式**
 
@@ -948,7 +954,7 @@ void SmartPointerDemo2()
   ```
   
 
-## 9. 确保类只有一个实例
+## 确保类只有一个实例
 
 在C++中，将**构造函数私有化**是一种实现单例模式（Singleton Pattern）的常见手段之一。
 
@@ -988,7 +994,7 @@ int main() {
 
 
 
-## 10. 友元函数和友元类
+##  友元函数和友元类
 
 作用：为了在类的成员函数外部直接访问对象的**私有成员**。友元friend，相当于是说：朋友是值得信任的，所以可以对他们公开一些自己的隐私。
 
@@ -1085,8 +1091,70 @@ int main() {
     }
     ```
 
+##  模板类/函数/结构体
 
-## 11. 宏
+- 为什么用模板？
+
+  当你发现一套操作对多个不同类型的变量操作时，为了避免重复定义多个类/函数/结构体却只是变一变数据类型，我们可以使用模板。
+
+### 函数模板
+
+体现在：调用函数时传递的参数类型
+
+```c++
+// ---------- 语法：----------
+template<class 数据类型参数标识符>
+<返回类型><函数名>(参数表)
+{
+    函数体
+}
+
+// ---------- 示例：----------
+//下面这个函数就可以遍历输出各个数据类型的数组元素
+template <class T>  //定义函数模板
+void outputArray(const T *array, int count) {
+    for (int i = 0; i < count; i++)
+        cout << array[i] << " "; //如果数组元素是类的对象，需要该对象所属类重载了流插入运算符“<<”
+    cout << endl;
+}
+```
+
+### 结构体模板
+
+体现在：声明结构元素时 StackNode<类型> s
+
+```c++
+// ---------- 示例：----------
+template<class T>
+struct StackNode
+{
+　　struct T data;
+　　struct StackNode<T> *next;
+};
+
+```
+
+### 类模板
+
+体现在:声明类对象时 Stack<类型> s
+
+```c++
+// ---------- 示例：----------
+template<class T>
+class Stack
+{
+　public:
+　　T pop();
+　　bool push(T e);
+　private:
+　　StackNode<T> *p;
+}
+template<class T>//类模板外的 成员函数实现
+T Stack<T>::pop()
+{...}
+```
+
+##  宏
 
 宏（Macro）是C/C++预处理器的一部分，它允许在代码中定义常量、简单的代码块替换、参数化代码替换等。宏在代码编译前会由预处理器进行展开和替换。
 
@@ -1185,80 +1253,20 @@ struct name { \
 };
 ```
 
-## 12. 静态成员和非静态成员：
-
-- 定义：
-
-  - **静态成员:** 属于整个类，与类的**具体实例**无关。在程序运行之前分配内存，程序结束后释放内存。
-  - **非静态成员:** 属于类的**实例**，每个实例拥有一份**独立的副本**。在创建对象时分配内存，对象销毁时释放内存。
-
-- 访问方式:
-
-  - **静态成员:** 通过类名访问，例如 `ClassName::staticMemberName`。
-  - **非静态成员:** 通过对象名访问，例如 `objectName.nonStaticMemberName`。
-
-- 生命周期:
-
-  - **静态成员:** 与类同生同死，程序运行期间始终存在。
-  - **非静态成员:** 与对象同生同死，创建对象时存在，对象销毁时消失。
-
-- 访问权限:
-
-  - **静态成员:** 可以像普通成员一样设置访问权限（public、private、protected）。
-  - **非静态成员:** 通常默认具有私有访问权限，只能在类内部访问。
-
-- 用途:
-
-  - 静态成员:
-    - 用于存储与**整个类**相关的信息，例如类名、版本号等。
-    - 用于定义**全局函数**或**类工厂函数**，无需创建对象即可调用。
-    - 用于定义与**类常量**相关的数据。
-  - 非静态成员:
-    - 用于存储与**特定对象**相关的信息，例如对象状态、属性等。
-    - 用于定义对**特定对象**进行操作的成员函数。
-
-- 例子：
-
-  ```c++
-  class Person {
-  public:
-    static int count; // 静态成员变量，用于统计创建的人数
-  
-    std::string name; // 非静态成员变量，存储姓名
-    int age; // 非静态成员变量，存储年龄
-  
-    Person(const std::string& name, int age) : name(name), age(age) {
-      count++; // 访问静态成员变量
-    }
-  
-    static void printCount() { // 静态成员函数
-      std::cout << "Total persons: " << count << std::endl;
-    }
-  
-    void introduce() { // 非静态成员函数
-      std::cout << "My name is " << name << " and I am " << age << " years old." << std::endl;
-    }
-  };
-  
-  int Person::count = 0; // 静态成员变量的定义
-  
-  int main() {
-    Person p1("Alice", 30);
-    Person p2("Bob", 25);
-  
-    p1.introduce();
-    p2.introduce();
-  
-    Person::printCount(); // 访问静态成员函数
-  
-    return 0;
-  }
-  ```
-
-
-## 13. 回调函数
+## 回调函数
 
 一个函数可以作为另一个函数的参数。这种技术通常称为**回调函数**。在C++中，可以通过函数指针或函数对象（如lambda表达式、`std::function`）来实现。
+
+### 两种实现的区别
+
+- 函数指针是一个指向函数的指针，它可以用于调用该函数。函数指针通常声明为指向特定类型和特定参数列表的函数
+  - 优点：简单易用，速度快
+  - 缺点：
+    1. 不能够处理可调用对象，例如lambda表达式、函数对象、成员函数等
+    2. 函数指针只能指向特定类型和特定参数列表的函数，如果需要切换到不同类型或者不同参数列表的函数，就需要修改函数指针的类型。
+- std::function是c++11为了解决函数指针的缺陷而引入的
+  - 它可以存储任意可调用对象，包括函数指针、函数对象、成员函数和lambda表达式等。
+  - 运行时多态：可以在运行时确定其类型和参数列表。
 
 ### 函数指针实现
 
@@ -1322,7 +1330,65 @@ int main() {
 
 ```
 
+### std::function理解
 
+- 基本概念
+
+  `std::function` 本身是一个模板类，用于存储和调用可调用对象（函数、lambda 表达式、函数对象等）。其返回值取决于所存储的可调用对象的返回类型。
+
+  就相当于创建了一个类，类提供了一个接口，这个接口根据数据类型来选择函数？
+
+- 常见用途：
+
+  **回调函数**：`std::function` 常用于设置回调函数，例如事件处理、异步操作完成后的处理等。
+
+  **函数参数**：可以作为函数参数，允许函数接受和调用用户自定义的可调用对象。
+
+- 一个例子
+
+  ```c++
+  class TxtIO {
+     public:
+      //  构造函数使用ifstream直接读取文件
+      TxtIO(const std::string &file_path) : fin(file_path) {}
+  
+      // * 通过回调函数的机制允许用户定义处理不同类型的数据
+      // 1. 定义回调函数类型
+      using IMUProcessFuncType = std::function<void(const IMU &)>;
+      using OdomProcessFuncType = std::function<void(const Odom &)>;
+      using GNSSProcessFuncType = std::function<void(const GNSS &)>;
+  
+      // 2. 注册回调函数
+      // 这里的imu_proc就是类没定义的回调函数，使用时可以将对应的函数/lambda表达式等任何可调用对象传过来
+      // 所以std::function称为模板类：回调函数在这里不用实现，等着外面传进来就好
+      TxtIO &SetIMUProcessFunc(IMUProcessFuncType imu_proc) {
+          // 使用 std::move 将 imu_proc 的资源移动到 imu_proc_ ，避免不必要的深拷贝操作，提高程序性能。
+          imu_proc_ = std::move(imu_proc);
+          return *this;
+      }
+  
+      TxtIO &SetOdomProcessFunc(OdomProcessFuncType odom_proc) {
+          odom_proc_ = std::move(odom_proc);
+          return *this;
+      }
+  
+      TxtIO &SetGNSSProcessFunc(GNSSProcessFuncType gnss_proc) {
+          gnss_proc_ = std::move(gnss_proc);
+          return *this;
+      }
+  
+      // 3. 遍历文件内容，调用回调函数
+      void Go();
+  
+     private:
+      std::ifstream fin;
+      IMUProcessFuncType imu_proc_;
+      OdomProcessFuncType odom_proc_;
+      GNSSProcessFuncType gnss_proc_;
+  };
+  ```
+
+  
 
 # C++小功能
 
