@@ -902,7 +902,7 @@ void SmartPointerDemo2()
   free(ptr);
   ```
 
-## lambda表达式
+## lambda表达式(匿名函数)
 
 - **什么是c++的lambda表达式**
 
@@ -911,13 +911,13 @@ void SmartPointerDemo2()
 - **lambda表达式的形式**
   
   ```
-  [capture_clause](parameters) -> return_type {函数体}
+  [capture_clause](parameters) -> return_type {function_body}
   ```
   
   -  capture_clause：用于捕获外部变量，决定了 lambda 表达式是否能够访问和修改外部作用域的变量。以为空、捕获所有外部变量的引用 [&]，或捕获所有外部变量的值 [=] 等。
   - parameters： 类似于函数参数，指定了 lambda 表达式的参数列表。
   - return_type：指定 lambda 表达式的返回类型。
-  - 函数体：实现具体的功能代码。
+  - function_body：实现具体的功能代码。
   
 - **lambda表达式相比直接定义函数的优势**
 
@@ -1257,6 +1257,8 @@ struct name { \
 
 一个函数可以作为另一个函数的参数。这种技术通常称为**回调函数**。在C++中，可以通过函数指针或函数对象（如lambda表达式、`std::function`）来实现。
 
+回调函数的目的就是为了将变化的模块抽离出来，延迟实现；固定的模块抽象出来设计好，“写死”。
+
 ### 两种实现的区别
 
 - 函数指针是一个指向函数的指针，它可以用于调用该函数。函数指针通常声明为指向特定类型和特定参数列表的函数
@@ -1272,21 +1274,22 @@ struct name { \
 
 ```c++
 #include <iostream>
-
+// ===========不变的模块，写死================
 // 定义一个函数指针
 typedef void (*CallbackFunc)(int);
 
-// 一个示例回调函数
-void myCallback(int value) {
-    std::cout << "Callback called with value: " << value << std::endl;
-}
-
-// 接受函数指针作为参数的函数
+// 接受函数指针即回调函数作为参数
 void processData(int data, CallbackFunc callback) {
     // 执行一些处理
     data *= 2;
     // 调用回调函数
     callback(data);
+}
+
+// =========变化的模块，放到客户端进行实现========
+// 回调函数的实现
+void myCallback(int value) {
+    std::cout << "Callback called with value: " << value << std::endl;
 }
 
 int main() {
@@ -1302,12 +1305,7 @@ int main() {
 ```c++
 #include <iostream>
 #include <functional>
-
-// 一个示例回调函数
-void myCallback(int value) {
-    std::cout << "Callback called with value: " << value << std::endl;
-}
-
+// ===========不变的模块，写死================
 // 接受 std::function 作为参数的函数
 void processData(int data, std::function<void(int)> callback) {
     // 执行一些处理
@@ -1316,14 +1314,23 @@ void processData(int data, std::function<void(int)> callback) {
     callback(data);
 }
 
+// =========变化的模块，放到客户端进行实现========
+// 函数
+void myCallback(int value) {
+    std::cout << "Callback called with value: " << value << std::endl;
+}
+// lambda表达式(匿名函数)
+auto lambda = [](int value) {
+    std::cout << "Lambda callback called with value: " << value << std::endl;
+}
+
 int main() {
-    // 使用函数指针
+    // **************** std::function可以接收任何可调用的对象 ****************
+    // 1. 接收一个函数
     processData(10, myCallback);
     
-    // 使用 lambda 表达式
-    processData(10, [](int value) {
-        std::cout << "Lambda callback called with value: " << value << std::endl;
-    });
+    // 2. 接收一个lambda表达式
+    processData(lambda(10));
 
     return 0;
 }
@@ -1344,26 +1351,27 @@ int main() {
 
   **函数参数**：可以作为函数参数，允许函数接受和调用用户自定义的可调用对象。
 
-- 一个例子
+- 一个嵌套在类里例子
 
+  高博激光slam书中的`io_utils.h` 和`run_imu_integration.cc`
+  
   ```c++
+  // ===========不变的模块，写死================:: io_utils.h
   class TxtIO {
      public:
       //  构造函数使用ifstream直接读取文件
       TxtIO(const std::string &file_path) : fin(file_path) {}
   
-      // * 通过回调函数的机制允许用户定义处理不同类型的数据
       // 1. 定义回调函数类型
+      // 因为有种数据，所以定义三个std::function类型
       using IMUProcessFuncType = std::function<void(const IMU &)>;
       using OdomProcessFuncType = std::function<void(const Odom &)>;
       using GNSSProcessFuncType = std::function<void(const GNSS &)>;
   
       // 2. 注册回调函数
-      // 这里的imu_proc就是类没定义的回调函数，使用时可以将对应的函数/lambda表达式等任何可调用对象传过来
-      // 所以std::function称为模板类：回调函数在这里不用实现，等着外面传进来就好
+  	// 定义三种接受 std::function 作为参数的函数
       TxtIO &SetIMUProcessFunc(IMUProcessFuncType imu_proc) {
-          // 使用 std::move 将 imu_proc 的资源移动到 imu_proc_ ，避免不必要的深拷贝操作，提高程序性能。
-          imu_proc_ = std::move(imu_proc);
+          imu_proc_ = std::move(imu_proc);	// 避免深拷贝，节省资源
           return *this;
       }
   
@@ -1377,7 +1385,7 @@ int main() {
           return *this;
       }
   
-      // 3. 遍历文件内容，调用回调函数
+      // 3. 在Go()中遍历文件内容，调用传递进来回调函数  
       void Go();
   
      private:
@@ -1386,8 +1394,62 @@ int main() {
       OdomProcessFuncType odom_proc_;
       GNSSProcessFuncType gnss_proc_;
   };
+  
+  // =========变化的模块，放到客户端进行实现========:: run_imu_integration.cc
+  sad::TxtIO io(FLAGS_imu_txt_path);
+  // 这里传了一个lambda表达式进去
+  // 这个匿名函数的参数imu，在Go()中调用回调函数imu_proc_时被赋予
+  io.SetIMUProcessFunc([&imu_integ, &save_result, &fout, &ui](const sad::IMU& imu) { xxx
+  }).Go();
+  
+  
+  // 附上Go()的实现
+  // ========= 不变的模块，写死 =========:: io_utils.cc
+  void TxtIO::Go() {
+      if (!fin) {
+          LOG(ERROR) << "未能找到文件";
+          return;
+      }
+  
+      while (!fin.eof()) {
+          std::string line;
+          std::getline(fin, line);
+          if (line.empty()) {
+              continue;
+          }
+  
+          if (line[0] == '#') {
+              // 以#开头的是注释
+              continue;
+          }
+  
+          // load data from line
+          std::stringstream ss;
+          ss << line;
+          std::string data_type;
+          ss >> data_type;
+  
+          if (data_type == "IMU" && imu_proc_) {
+              double time, gx, gy, gz, ax, ay, az;
+              ss >> time >> gx >> gy >> gz >> ax >> ay >> az;
+              // imu_proc_(IMU(time, Vec3d(gx, gy, gz) * math::kDEG2RAD, Vec3d(ax, ay, az)));
+              imu_proc_(IMU(time, Vec3d(gx, gy, gz), Vec3d(ax, ay, az)));
+          } else if (data_type == "ODOM" && odom_proc_) {
+              double time, wl, wr;
+              ss >> time >> wl >> wr;
+              odom_proc_(Odom(time, wl, wr));
+          } else if (data_type == "GNSS" && gnss_proc_) {
+              double time, lat, lon, alt, heading;
+              bool heading_valid;
+              ss >> time >> lat >> lon >> alt >> heading >> heading_valid;
+              gnss_proc_(GNSS(time, 4, Vec3d(lat, lon, alt), heading, heading_valid));
+          }
+      }
+  
+      LOG(INFO) << "done.";
+  }
   ```
-
+  
   
 
 # C++小功能
