@@ -474,7 +474,137 @@ p40
    - Da die aufrufende Funktion warten muss, bis die aufgerufene Funktion das Ergebnis zurückliefert, wächst der call stack stetig an.
    - Erst wenn die aufgerufenen Funktionen ihren Wert zurückliefern, werden die Funktionen und ihre Daten vom Stack entfernt.
 
+# C++11常用特性：
+
+需要详细介绍的见c++杂记
+
+## 1. 自动类型推导`auto`
+
+```c++
+auto x = 42;        // int
+auto y = 3.14;      // double
+auto z = "Hello";   // const char*
+```
+
+## 2. 范围for循环
+
+```c++
+std::vector<int> v = {1, 2, 3, 4, 5};
+for (auto& elem : v) {
+    std::cout << elem << " ";
+}
+```
+
+## 3. Lambda表达式(匿名函数)
+
+```c++
+auto add = [](int a, int b) { return a + b; };
+std::cout << add(2, 3); // 输出 5
+```
+
+## 4. 智能指针
+
+```c++
+std::shared_ptr<int> p1 = std::make_shared<int>(10);
+std::unique_ptr<int> p2 = std::make_unique<int>(20);
+```
+
+## 5. nullptr关键字
+
+```c++
+// 引入新的空指针常量，替代传统的 NULL。
+// nullptr是一个实际的空指针类型，而NULL只是一个宏，所以更加的安全和语义明确
+int* p = nullptr;
+```
+
+## 6. 静态断言`static_assert`
+
+```c++
+// 在编译时就进行断言检查,以确保某些条件在编译时得到满足。
+// 区别于assert,只在运行时对条件进行检查。
+static_assert(sizeof(int) == 4, "Integers must be 4 bytes");
+```
+
+## 7. 右值引用`&&` 和 移动语义`std::move`：
+
+```c++
+// 提高了对象的转移效率，减少不必要的拷贝。
+std::vector<int> v1 = {1, 2, 3};
+std::vector<int> v2 = std::move(v1); // v1 现在为空
+```
+
+## 8. `std::thread`多线程支持
+
+```c++
+std::thread t([]{ std::cout << "Hello from thread"; });
+t.join();
+```
+
+## 9. `constexpr`常量表达式
+
+```c++
+// 在编译时就可以计算，而不是运行时
+// 使得在编译期间就能够得到常量的值，提高程序的效率
+constexpr int square(int x) {
+    return x * x;
+}
+constexpr int result = square(5);
+```
+
+## 10. `std::chrono`时间库
+
+```c++
+auto start = std::chrono::high_resolution_clock::now();
+// 一些操作
+auto end = std::chrono::high_resolution_clock::now();
+auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+std::cout << "Duration: " << duration << "ms\n";
+```
+
+## 11. 统一的初始化语法
+
+```c++
+// 使用花括号初始化任何对象，包括内置类型和用户自定义类型。
+int x{10};
+std::vector<int> v{1, 2, 3, 4, 5};
+```
+
+## 12. `enum class`枚举
+
+```c++
+// 强类型枚举，避免命名冲突和隐式转换问题。
+enum class Color { Red, Green, Blue };	// 默认从0开始递增
+Color c = Color::Red;	
+
+int x = Color::Red; // 编译错误：不能将枚举值直接赋给整数
+int x = static_cast<int>(Color::Red); // 显式转换为整数
+```
+
+## 13. 模板别名`using`
+
+```c++
+// 使用 using 关键字还可以为模板创建别名，比 typedef 更灵活
+template<typename T>
+using Vec = std::vector<T>;
+Vec<int> v; // std::vector<int>
+```
+
+## 14. 继承构造函数
+
+```c++
+class Base {
+public:
+    Base(int x) {}
+};
+// 允许在派生类中继承基类的构造函数。
+class Derived : public Base {
+using Base::Base; // 继承 Base 的构造函数
+};
+
+```
+
 # C++杂记
+
 ## 指针，引用和const
 
 参见Tag1中的3，4
@@ -757,7 +887,96 @@ int main(int argc,char *argv[])// 等于 int main(int argc,char **argv);
     - 因为此时需要的是一个指针的地址
     
 
-## 智能指针
+## c++11: 右值引用和移动语义
+
+这两个的目的都是为了避免拷贝操作，用移动资源的方式，降低资源消耗。
+
+### 移动和拷贝的区别
+
+- 移动move:
+
+  移动操作将原始对象的资源转移到新对象中，同时将原始对象置于有效但未指定的状态。移动不会创建资源的副本，而是将资源的所有权转移给新对象。
+
+- 拷贝copy:
+
+  拷贝操作将原始对象的副本创建到新的对象中。新对象与原始对象是独立的，它们之间的修改互不影响。
+
+- 所以移动比拷贝更耗资源。
+
+### 左值和右值的区别
+
+- 左值: 一个占据内存中某个可识别的位置（也就是一个地址）的对象。
+- 右值：一个不表示内存中某个可识别位置的对象的表达时
+
+```c++
+int x = 10;    // x 是左值, 10是右值
+int* p = &x;   // 正确，可以取左值x的地址
+int* p = &10;  // 错误，右值10不能取地址
+```
+
+### 右值引用`&&`
+
+如上面的例子所是，传统的左值引用`&`只能绑定到的左值。但`&&`可以绑定到右值，让我们可以临时的窃取一个对象的资源。
+
+直接引用右值就可以避免不必要的深拷贝，减少资源的分配和释放，提高代码的执行效率。
+
+右值引用主要用于**类对象**，以优化对象的转移和避免不必要的拷贝。
+
+例子：
+
+```c++
+class MyClass {
+public:
+    MyClass() : data(new int[1000]) {}
+
+    // 移动构造函数
+    MyClass(MyClass&& other) noexcept : data(other.data) {
+        other.data = nullptr;
+    }
+
+    // 移动赋值运算符
+    // 在构造新的实例时，把另一个实例other的资源移动给新的实例
+    MyClass& operator=(MyClass&& other) noexcept {
+        if (this != &other) {
+            delete[] data;
+            data = other.data;
+            other.data = nullptr;
+        }
+        return *this;
+    }
+
+    ~MyClass() {
+        delete[] data;
+    }
+
+private:
+    int* data;
+};
+
+```
+
+### 移动语义`std::move`
+
+`std::move` 是标准库提供的一个函数模板，用于将左值强制转换为右值引用。这使得我们能够显式地指定对象可以被“移动”，从而启用移动语义。
+
+两个例子：
+
+```c++
+// 1. 显式移动
+std::vector<int> v1 = {1, 2, 3};
+std::vector<int> v2 = std::move(v1); // v1 现在为空，资源被转移到 v2
+
+// 2. 避免不必要拷贝
+MyClass createObject() {
+    MyClass obj;
+    // 使用 std::move 将临时对象转换为右值引用
+    return std::move(obj);
+}
+```
+
+
+
+## c++11: 智能指针
 
 ### 什么是智能指针
 
@@ -902,7 +1121,7 @@ void SmartPointerDemo2()
   free(ptr);
   ```
 
-## lambda表达式(匿名函数)
+## c++11: lambda表达式(匿名函数)
 
 - **什么是c++的lambda表达式**
 
@@ -1450,6 +1669,103 @@ int main() {
   }
   ```
   
+
+## 信号
+
+信号是软件中断，它是在软件层次上对中断机制的一种模拟，是一种异步通信的方式（异步：不知道信号什么时候会来）。信号可以导致一个正在运行的进程被另一个正在运行的异步进程中断，转而处理某一个突发事件。这里我们学习的“信号”就是属于这么一种“中断”。我们在终端上敲“Ctrl+c”，就产生一个“中断”，相当于产生一个信号，接着就会处理这么一个“中断任务”（默认的处理方式为中断当前进程）。
+
+> 中断：先停下本进程，去处理信号。内核进程可以利用它来通知用户空间进程发生了哪些系统事件。 
+
+### 信号要素
+
+每个信号必备4要素，分别是：1.编号 2.名称 3.事件 4.默认处理动作。
+
+参考[网页](https://www.cnblogs.com/codingbigdog/p/16246557.html)
+
+### 信号阻塞sigprocmask()
+
+- 有时候不希望在接到信号时就立即停止当前执行，去处理信号，同时也不希望忽略该信号，而是延时一段时间去调用信号处理函数。这种情况是通过阻塞信号实现的。
+
+- 信号递达（Delivery）：执行信号的处理动作
+
+  信号未决（Pending）：信号从产生到递达之间的状态
+
+  - 进程可以选择阻塞（Block）某个信号。被阻塞的信号产生时将保持在未决状态，直到进程解除对此信号的阻塞，才执行递达的动作。
+
+- sigprocmask()
+
+  ```c
+  #include <signal.h>      
+  int sigprocmask(ubt how,const sigset_t*set,sigset_t *oldset); 
+  ```
+
+  **参数：**
+
+  - how：用于指定信号修改的方式，可能选择有三种
+    - SIG_BLOCK			
+      - 将set所指向的信号集中包含的信号加到当前的信号掩码中。即信号掩码和set信号集进行或操作。
+    - SIG_UNBLOCK
+      - 将set所指向的信号集中包含的信号从当前的信号掩码中删除。即信号掩码和set进行与操作
+    - SIG_SETMASK
+      - 将set的值设定为新的进程信号掩码。即set对信号掩码进行了赋值操作
+  - set：为指向信号集的指针，在此专指新设的信号集，如果仅想读取现在的屏蔽值，可将其置为NULL。
+  - oldset：也是指向信号集的指针，在此存放原来的信号集。可用来检测信号掩码中存在什么信号。
+
+  **返回：**
+
+  - 成功执行时，返回0。失败返回-1，errno被设为EINVAL
+
+- sigsuspend()
+
+  ```c
+  int sigsuspend(const sigset_t*sigmask);
+  ```
+
+  **进程执行到sigsuspend时，sigsuspend并不会立刻返回，进程处于TASK_INTERRUPTIBLE状态并立刻放弃CPU，等待UNBLOCK（mask之外的）信号的唤醒** 。进程在接收到UNBLOCK（mask之外）信号后，调用处理函数，然后把现在的信号集还原为原来的，sigsuspend返回，进程恢复执行。
+
+- 例子：
+
+  ```c
+  #include <unistd.h>
+  #include <signal.h>
+  #include <stdio.h>
+  void handler(int sig)   //信号处理程序
+  {
+     if(sig == SIGINT)
+        printf("SIGINT sig");
+     else if(sig == SIGQUIT)
+        printf("SIGQUIT sig");
+     else
+        printf("SIGUSR1 sig");
+  }
+   
+  int main()
+  {
+      sigset_t new,old,wait;   //三个信号集
+      struct sigaction act;
+      act.sa_handler = handler;
+      sigemptyset(&act.sa_mask);
+      act.sa_flags = 0;
+      sigaction(SIGINT, &act, 0);    //可以捕捉以下三个信号：SIGINT/SIGQUIT/SIGUSR1
+      sigaction(SIGQUIT, &act, 0);
+      sigaction(SIGUSR1, &act, 0);
+     
+      sigemptyset(&new);
+      sigaddset(&new, SIGINT);  //SIGINT信号加入到new信号集中
+      sigemptyset(&wait);
+      sigaddset(&wait, SIGUSR1);  //SIGUSR1信号加入wait
+      sigprocmask(SIG_BLOCK, &new, &old);       //将SIGINT阻塞，保存当前信号集到old中
+     
+      //临界区代码执行    
+    
+      if(sigsuspend(&wait) != -1)  //程序在此处挂起；用wait信号集替换new信号集。即：过来SIGUSR1信  号，阻塞掉，程序继续挂起；过来其他信号，例如SIGINT，则会唤醒程序。执行sigsuspend的原子操作。注意：如果“sigaddset(&wait, SIGUSR1);”这句没有，则此处不会阻塞任何信号，即过来任何信号均会唤醒程序。
+          printf("sigsuspend error");
+      printf("After sigsuspend");
+      sigprocmask(SIG_SETMASK, &old, NULL);
+      return 0;
+  }
+  ```
+
   
 
 # C++小功能
