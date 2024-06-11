@@ -116,32 +116,105 @@ set confirm           "没有保存或文件只读时弹出确认
 
 ## 1. 基本操作
 
-- **Moving the cursor**
+- **光标移动：基本移动`hjkl`**
+  
   - 基本移动：h, j, k, l 《-》左下上右
   - 通过motion: w/e来移动：数字+w/e
     - 2w：移动光标到到当前单词后面第二个(从当前单词开始数)单词的前面
     - 3e：移动光标到当前单签后面第三个(从当前单词开始数)单词的末尾
+  
+- **光标移动：`G`和`gg`**
+  
+  - 查看当前光标所在位置：`ctrl`+`g`
+  
+    底部会出现信息：
 
+    ```
+    "/tmp/tutorxBz8Rm" [Modified] line 502 of 970 --51%-- col 3
+    ```
+  
+  - 跳到文档底部：`G`
+  
+  - 跳到文档顶部：`gg`
+  
+  - 跳回到特定502行:`502G`
+  
+  - 跳到(),[],{}对应另一半括号的位置:
+  
+    将光标移动到括号前，然后按`%`，光标就会移动该括号对应的另一半前。
+  
+- **文本搜索：`/`和`?`**
+  
+  - 向后搜索`/`：
+  
+    `/example`+`Enter`会将光标移动到当前光标后第一个出现的`example`。
+
+  - 向前搜索`?`：
+  
+    `?example`+`Enter`会将光标移动到当前光标前第一个出现的`example`。
+  
+  - 重复搜索:
+  
+    按 `n` 键跳转到下一个匹配的文本。
+  
+    按 `N` 键跳转到上一个匹配的文本。
+  
+  - 高亮
+  
+    - 启用高亮 `:set hlsearch`
+    - 关闭高亮 `:noh`
+  
+  - 搜索并替换
+  
+    - 替换当前行内的一个文本`:s`
+  
+      将当前行中第一个 "foo" 替换为 "bar"，可以输入 `:s/foo/bar/`，然后按 `Enter`。
+  
+    - 替换当前行内的所有该文本`:s`+g
+  
+      将当前行中所有 "foo" 替换为 "bar"，可以输入 `:s/foo/bar/g`，然后按 `Enter`。
+  
+    - 替换指定行内的本文`:#,#s`
+  
+      替换568行中所有"foo"为"bar"，可以输入`:568,568s/foo/bar/g`，然后按Enter。
+  
+    - 替换整个文件的文本`:%s`+`g`
+  
+      将文件中的 "foo" 都替换为 "bar"，可以输入 `:%s/foo/bar/g`，然后按 `Enter`。
+  
+    - 开启确认提示`c`
+  
+      如输入`:%s/foo/bar/gc`，就会在每个搜索要替换的地方要求确认是否替换：
+  
+      - **`y`** (yes) - 替换当前匹配项，并继续查找下一个匹配项。
+      - **`n`** (no) - 不替换当前匹配项，并继续查找下一个匹配项。
+      - **`a`** (all) - 替换当前匹配项，并且不再提示，直接替换所有剩余的匹配项。
+      - **`q`** (quit) - 退出替换模式，停止查找和替换。
+      - **`l`** (last) - 替换当前匹配项，并停止查找和替换（即，仅替换当前匹配项）。
+      - **`^E`** (Ctrl + E) - 向下滚动窗口（不影响替换过程），使更多文本内容显示出来。
+      - **`^Y`** (Ctrl + Y) - 向上滚动窗口（不影响替换过程），使更多文本内容显示出来。
+  
 - **Exiting Vim**
+
   1. `<esc>`进入normal mode
   2. 输入`:q! <enter>`丢弃一切退出
   3. 输入`:wq <enter>`保存后退出
   4. `vimtutor <enter>`返回教程
-  
+
 - **Undo command**
   - 取消上一个执行的命令：normal model下小写的 `u`
   - 恢复整行的修改：normal model下大写的`U`
   - 取消undo：按住`<ctrl> +R `，按了几下u，就可以按几下R
 
-- **进入/退出输入模式**：
-  
+- **进入/退出输入模式`i`和`A`**：
+
   - Insertion： 在要输入的地方按`i`
-  
+
   - Appending：随便光标在哪，按大写的`A`，光标都会来到这行的末尾并进入insert mode
-  
+
   - 按`esc`退出输入模式
-  
-- **文本编辑：删除**
+
+- **文本编辑：删除`d`**
 
   - 单个字符删除：光标移动到要删除的字符前，normal mode下按`x`删除
 
@@ -153,7 +226,10 @@ set confirm           "没有保存或文件只读时弹出确认
 
     格式是：
 
-    `operator [number] motion`
+    ```
+    operator [number] motion
+    d [number] motion
+    ```
 
     - operator - is what to do, such as  d  for delete
     - [number] - is an optional count to repeat the motion
@@ -170,5 +246,42 @@ set confirm           "没有保存或文件只读时弹出确认
 
     - `4dd`：删除包括当前行在内的下面4行
 
-- **文本编辑：放置**
+- **文本编辑：放置`p`**
 
+  - 剪切：
+    - 上面任何被删除的东西都会被保存到寄存器中register中，然后就可以按`p`放置到当前光标后字符的后面
+    - 注意register只保存最后一次删除的东西，按多次p放置的都是最后一次删除的
+
+- **文本编辑：替换`r`**
+
+  - 只能替换一个字符：
+
+    移动光标到要替换的字符前，按`r`，然后输入要替换的字符
+
+- **文本编辑：改变`c`**
+
+  - 如果想改变一个单词，如luex -> line
+
+    - 把光标移动到u前
+    - 按ce，删除字符uex
+    - 然后会自动进入输入模式
+
+    所以ce相当于de然后i
+
+  - 和删除一样可以结合motion来改变
+
+    格式是：
+
+    ```
+    operator [number] motion
+    c [number] motion
+    ```
+
+    - operator - is what to do, such as  d  for delete
+    - [number] - is an optional count to repeat the motion
+    - motion   - moves over the text to operate on, such as  
+      - w (start of the next word),  
+      - $ (to the end of line)
+      - e(end of current word)
+
+  
