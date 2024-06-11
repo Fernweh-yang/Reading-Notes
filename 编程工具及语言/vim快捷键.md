@@ -127,12 +127,21 @@ set confirm           "没有保存或文件只读时弹出确认
   2. 输入`:q! <enter>`丢弃一切退出
   3. 输入`:wq <enter>`保存后退出
   4. `vimtutor <enter>`返回教程
+  
 - **Undo command**
   - 取消上一个执行的命令：normal model下小写的 `u`
   - 恢复整行的修改：normal model下大写的`U`
   - 取消undo：按住`<ctrl> +R `，按了几下u，就可以按几下R
 
-- **Text Editing: Deletion**
+- **进入/退出输入模式**：
+  
+  - Insertion： 在要输入的地方按`i`
+  
+  - Appending：随便光标在哪，按大写的`A`，光标都会来到这行的末尾并进入insert mode
+  
+  - 按`esc`退出输入模式
+  
+- **文本编辑：删除**
 
   - 单个字符删除：光标移动到要删除的字符前，normal mode下按`x`删除
 
@@ -161,12 +170,5 @@ set confirm           "没有保存或文件只读时弹出确认
 
     - `4dd`：删除包括当前行在内的下面4行
 
-- **Text Editing: Insertion**
+- **文本编辑：放置**
 
-  在要输入的地方按`i`
-
-- **Text Editing: Appending**
-
-  随便光标在哪，按大写的`A`，光标都会来到这行的末尾并进入insert mode
-
-看完lesson2.0
