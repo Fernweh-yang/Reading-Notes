@@ -1178,6 +1178,239 @@ class IMUIntegration {
 
 ### 3.2 案例：RTK读数的显示
 
+#### 3.2.1 数据例子
+
+```txt
+ODOM 1624426287.19101906 0 0
+GNSS 1624426287.22183037 39.8716278074999977 116.477817216999995 37.1386985778808594 6.2900999999999998 0
+IMU 1624426287.22854877 0.000680678408277777028 -0.000532325421858261482 0.000656243798749856877 -0.605724081666666581 0.0254972899999999988 9.80681344416666789
+```
+
+- GNSS含义：
+  - 时间戳、纬度、经度、高度、方向角、方向角有效标志
+- IMU的含义：
+  - 时间戳、陀螺仪、加速度计
+
+#### 3.2.2 经纬度转utm坐标系
+
+这里使用一个开源的库来完成,ros自己也提供了一个开源库。然后将将utm坐标从gnss坐标系转为车身坐标系：
+$$
+\mathbf{T}_{WB}=\mathbf{T}_{WG}\mathbf{T}_{GB}
+$$
+W:世界，B:车身，G:GNSS
+
+其中GNSS的朝向$\mathbf{R}_{WG}$是因为有两个RTK才能确认的。如果是单天线方案，当车辆朝向不明时，无法确定车辆本体的世界坐标。
+
+utm_convert.cc
+
+```c++
+#include "ch3/utm_convert.h"
+#include "common/math_utils.h"
+#include "utm_convert/utm.h"
+
+#include <glog/logging.h>
+
+namespace sad {
+
+// ! 使用开源库utm_convert/utm.h将经纬度转为UTM坐标
+bool LatLon2UTM(const Vec2d& latlon, UTMCoordinate& utm_coor) {
+    long zone = 0;
+    char char_north = 0;
+    long ret = Convert_Geodetic_To_UTM(latlon[0] * math::kDEG2RAD, latlon[1] * math::kDEG2RAD, &zone, &char_north,
+                                       &utm_coor.xy_[0], &utm_coor.xy_[1]);
+    utm_coor.zone_ = (int)zone;
+    utm_coor.north_ = char_north == 'N';
+
+    return ret == 0;
+}
+
+// ! 使用开源库utm_convert/utm.h将UTM坐标转为经纬度
+bool UTM2LatLon(const UTMCoordinate& utm_coor, Vec2d& latlon) {
+    bool ret = Convert_UTM_To_Geodetic((long)utm_coor.zone_, utm_coor.north_ ? 'N' : 'S', utm_coor.xy_[0],
+                                       utm_coor.xy_[1], &latlon[0], &latlon[1]);
+    latlon *= math::kRAD2DEG;
+    return ret == 0;
+}
+
+// ! 将utm坐标从gnss坐标系转为车身坐标系
+bool ConvertGps2UTM(GNSS& gps_msg, const Vec2d& antenna_pos, const double& antenna_angle, const Vec3d& map_origin) {
+    // * 1. 经纬高转换为UTM
+    UTMCoordinate utm_rtk;
+    if (!LatLon2UTM(gps_msg.lat_lon_alt_.head<2>(), utm_rtk)) {
+        return false;
+    }
+    utm_rtk.z_ = gps_msg.lat_lon_alt_[2];
+
+    // * 2. GPS heading朝向 转成弧度
+    // math::kDEG2RAD = pi/180
+    // 在这里方向角heading_valid_是因为双天线方案所以才可以得到的
+    // 我们使用东北天坐标系的utm，但该rtk厂商输出的是北东地坐标系，两者旋转方向相反，因此需要将朝向角转换一下。
+    double heading = 0;
+    if (gps_msg.heading_valid_) {
+        heading = (90 - gps_msg.heading_) * math::kDEG2RAD;  // 北东地转到东北天
+    }
+
+    // * 3. 得到gnss相对于车身的坐标TBG
+    // 这里的安装偏角antenna_angle 和 安装偏移antenna_pos 都是依靠装gnss时标定得到的
+    SE3 TBG(SO3::rotZ(antenna_angle * math::kDEG2RAD), Vec3d(antenna_pos[0], antenna_pos[1], 0));
+    SE3 TGB = TBG.inverse();
+
+    // * 4. 由gnss的utm坐标确定车身本体的世界坐标TWB
+    /// 若指明地图原点，则减去地图原点
+    double x = utm_rtk.xy_[0] - map_origin[0];
+    double y = utm_rtk.xy_[1] - map_origin[1];
+    double z = utm_rtk.z_ - map_origin[2];
+    SE3 TWG(SO3::rotZ(heading), Vec3d(x, y, z));    // gnss的世界坐标是根据 朝向 + utm 得到的
+    SE3 TWB = TWG * TGB;
+
+    gps_msg.utm_valid_ = true;
+    gps_msg.utm_.xy_[0] = TWB.translation().x();
+    gps_msg.utm_.xy_[1] = TWB.translation().y();
+    gps_msg.utm_.z_ = TWB.translation().z();
+
+    if (gps_msg.heading_valid_) {
+        // 组装为带旋转的位姿
+        gps_msg.utm_pose_ = TWB;
+    } else {
+        // 组装为仅有平移的SE3
+        // 注意当安装偏移存在时，并不能实际推出车辆位姿
+        gps_msg.utm_pose_ = SE3(SO3(), TWB.translation());
+    }
+
+    return true;
+}
+
+bool ConvertGps2UTMOnlyTrans(GNSS& gps_msg) {
+    /// 经纬高转换为UTM
+    UTMCoordinate utm_rtk;
+    LatLon2UTM(gps_msg.lat_lon_alt_.head<2>(), utm_rtk);
+    gps_msg.utm_valid_ = true;
+    gps_msg.utm_.xy_ = utm_rtk.xy_;
+    gps_msg.utm_.z_ = gps_msg.lat_lon_alt_[2];
+    gps_msg.utm_pose_ = SE3(SO3(), Vec3d(gps_msg.utm_.xy_[0], gps_msg.utm_.xy_[1], gps_msg.utm_.z_));
+    return true;
+}
+
+}  // namespace sad
+```
+
+#### 3.2.3 绘制整个GNSS轨迹
+
+process_gnss.cc
+
+```c++
+#include <glog/logging.h>
+#include <iomanip>
+#include <memory>
+
+#include "common/gnss.h"
+#include "common/io_utils.h"
+#include "tools/ui/pangolin_window.h"
+#include "utm_convert.h"
+
+DEFINE_string(txt_path, "./data/ch3/10.txt", "数据文件路径");
+
+// 以下参数仅针对本书提供的数据
+DEFINE_double(antenna_angle, 12.06, "RTK天线安装偏角（角度）");
+DEFINE_double(antenna_pox_x, -0.17, "RTK天线安装偏移X");
+DEFINE_double(antenna_pox_y, -0.20, "RTK天线安装偏移Y");
+DEFINE_bool(with_ui, true, "是否显示图形界面");
+
+/**
+ * 本程序演示如何处理GNSS数据
+ * 我们将GNSS原始读数处理成能够进行后续处理的6自由度Pose
+ * 需要处理UTM转换、RTK天线外参、坐标系转换三个步骤
+ *
+ * 我们将结果保存在文件中，然后用python脚本进行可视化
+ */
+
+int main(int argc, char** argv) {
+    google::InitGoogleLogging(argv[0]);
+    FLAGS_stderrthreshold = google::INFO;
+    FLAGS_colorlogtostderr = true;
+    google::ParseCommandLineFlags(&argc, &argv, true);
+
+    // * 1. 使用gflags从命令行参数中读取gnss原始数据 
+    if (fLS::FLAGS_txt_path.empty()) {
+        return -1;
+    }
+
+    sad::TxtIO io(fLS::FLAGS_txt_path);
+
+    std::ofstream fout("./data/ch3/gnss_output.txt");
+    Vec2d antenna_pos(FLAGS_antenna_pox_x, FLAGS_antenna_pox_y);
+
+    // * 2. 定义匿名函数作为后面的回调函数，用于将从gnss算出的车身位姿输出到文件中去
+    auto save_result = [](std::ofstream& fout, double timestamp, const SE3& pose) {
+        auto save_vec3 = [](std::ofstream& fout, const Vec3d& v) { fout << v[0] << " " << v[1] << " " << v[2] << " "; };
+        auto save_quat = [](std::ofstream& fout, const Quatd& q) {
+            fout << q.w() << " " << q.x() << " " << q.y() << " " << q.z() << " ";
+        };
+
+        fout << std::setprecision(18) << timestamp << " " << std::setprecision(9);
+        save_vec3(fout, pose.translation());
+        save_quat(fout, pose.unit_quaternion());
+        fout << std::endl;
+    };
+
+    // * 3. 可视化窗口
+    std::shared_ptr<sad::ui::PangolinWindow> ui = nullptr;
+    if (FLAGS_with_ui) {
+        ui = std::make_shared<sad::ui::PangolinWindow>();
+        ui->Init();
+    }
+
+    // * 4. 使用TxtIO读去gnss原始数据，并用下面定义的匿名函数对其进行处理
+    bool first_gnss_set = false;
+    Vec3d origin = Vec3d::Zero();
+    io.SetGNSSProcessFunc([&](const sad::GNSS& gnss) {
+          sad::GNSS gnss_out = gnss;
+          // 4.1 经纬度转utm，并由此得到车身的世界坐标
+          if (sad::ConvertGps2UTM(gnss_out, antenna_pos, FLAGS_antenna_angle)) {
+              if (!first_gnss_set) {
+                  origin = gnss_out.utm_pose_.translation();
+                  first_gnss_set = true;
+              }
+
+              // 4.2 减掉一个原点
+              gnss_out.utm_pose_.translation() -= origin;
+              // 4.3 调用上面定义的匿名函数来保存数据
+              save_result(fout, gnss_out.unix_time_, gnss_out.utm_pose_);
+
+              if (ui) {
+                  ui->UpdateNavState(
+                      sad::NavStated(gnss_out.unix_time_, gnss_out.utm_pose_.so3(), gnss_out.utm_pose_.translation()));
+                  usleep(1e3);
+              }
+          }
+      }).Go();
+
+    if (ui) {
+        while (!ui->ShouldQuit()) {
+            usleep(1e5);
+        }
+        ui->Quit();
+    }
+
+    return 0;
+}
+```
+
+#### 3.2.4 运行
+
+1. 从GNSS原始读数得到世界坐标系下的车身位姿
+
+   ```
+   ./bin/process_gnss --txt_path ./data/ch3/10.txt
+   ```
+
+2. 绘制二维和三维轨迹
+
+   ```
+   python scripts/plot_ch3_gnss_3d.py ./data/ch3/gnss_output.txt
+   python scripts/plot_ch3_gnss_2d.py ./data/ch3/gnss_output.txt
+   ```
+
 ## 4. 使用误差状态卡尔曼滤波器实现组合导航
 
 现在结合RTK和IMU提供的数据，使用误差状态卡尔曼滤波器(Error State Kalman Filter, ESKF)来实现传统的组合导航算法。
