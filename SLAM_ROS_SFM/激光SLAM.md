@@ -1,5 +1,6 @@
-
 # LOAM论文
+
+[理论讲解](https://zhuanlan.zhihu.com/p/111388877)
 
 ## 进化路线：
 

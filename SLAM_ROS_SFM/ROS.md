@@ -3828,6 +3828,137 @@ https://blog.csdn.net/luyuhangGray/article/details/122634340
 
 https://zhuanlan.zhihu.com/p/373598208
 
+### 可视化点云
+
+- cpp:
+
+  ```c++
+  #include <pcl/io/pcd_io.h>
+  #include <pcl/visualization/pcl_visualizer.h>
+  
+  int main(int argc, char** argv) {
+      if (argc != 2) {
+          std::cerr << "Usage: " << argv[0] << " <pcd file>" << std::endl;
+          return -1;
+      }
+  
+      // 创建点云对象
+      pcl::PointCloud<pcl::PointXYZI>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZI>);
+  
+      // 读取 PCD 文件
+      if (pcl::io::loadPCDFile<pcl::PointXYZI>(argv[1], *cloud) == -1) {
+          PCL_ERROR("Couldn't read file %s \n", argv[1]);
+          return -1;
+      }
+  
+      // 创建 PCL 可视化对象
+      pcl::visualization::PCLVisualizer::Ptr viewer(new pcl::visualization::PCLVisualizer("3D Viewer"));
+      viewer->setBackgroundColor(0, 0, 0);
+  	// 根据点云强度来决定颜色
+      pcl::visualization::PointCloudColorHandlerGenericField<pcl::PointXYZI> intensity_distribution(cloud, "intensity");
+      viewer->addPointCloud<pcl::PointXYZI>(cloud, intensity_distribution, "sample cloud");
+      viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 1, "sample cloud");
+      viewer->addCoordinateSystem(1.0);
+      viewer->initCameraParameters();
+  
+      // 开始主循环
+      while (!viewer->wasStopped()) {
+          viewer->spinOnce(100);
+          // std::this_thread::sleep_for(std::chrono::milliseconds(100));
+      }
+  
+      return 0;
+  }
+  
+  ```
+
+- cmakelists.txt
+
+  ```cmake
+  cmake_minimum_required(VERSION 3.5)
+  project(hx_multi_sensor_mapping)
+  
+  set(CMAKE_BUILD_TYPE Release)
+  set(CMAKE_CXX_FLAGS "-std=c++14 -O3 -Werror=return-type")
+  set(CMAKE_CXX_STANDARD 14)
+  list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake_modules)
+  
+  set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/bin)
+  set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/lib)
+  set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/lib)
+  
+  # Boost
+  find_package(Boost)
+  
+  # Eigen3 
+  find_package(Eigen3 REQUIRED)
+  
+  # OpenCV
+  find_package(OpenCV REQUIRED)
+  include_directories(${OpenCV_INCLUDE_DIRS})
+  
+  # Cholmod
+  find_package(Cholmod REQUIRED)
+  include_directories(${CHOLMOD_INCLUDE_DIR})
+  
+  # CSparse
+  find_package(CSparse REQUIRED)
+  include_directories(${CSPARSE_INCLUDE_DIR})
+  
+  # Yaml
+  find_package(yaml-cpp REQUIRED)
+  
+  # Json
+  find_package(nlohmann_json REQUIRED)
+  
+  # OpenMP
+  FIND_PACKAGE(OpenMP REQUIRED)
+  if (OPENMP_FOUND)
+    message("OPENMP FOUND")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
+  endif ()
+  
+  # Ceres
+  find_package(Ceres REQUIRED)
+  include_directories(${CERES_INCLDE_DIRS})
+  
+  # PCL
+  find_package(PCL REQUIRED)
+  include_directories(${PCL_INCLUDE_DIRS})
+  add_definitions(${PCL_DEFINITIONS})
+  
+  set(THIRD_PARTY_LIBS 
+    ${OpenCV_LIBS}
+    ${PCL_LIBRARIES}
+    ${CHOLMOD_LIBRARIES}
+    ${CERES_LIBRARIES}
+    ${YAML_CPP_LIBRARIES}
+    -lboost_filesystem -lboost_system
+    nlohmann_json::nlohmann_json
+  )
+  
+  include_directories(
+    ${PROJECT_SOURCE_DIR}/include
+    ${PROJECT_SOURCE_DIR}/third_party/nanoflann
+    ${PROJECT_SOURCE_DIR}/third_party
+  )
+  
+  add_subdirectory(src)
+  add_subdirectory(examples)
+  add_subdirectory(third_party/ceres_slam)
+  
+  add_executable(visual_pcd common_tools/visual_pcd.cpp)
+  target_link_libraries(visual_pcd
+      ${THIRD_PARTY_LIBS}
+  )
+  ```
+
+  
+
+
+
 # 三、ROS图像处理工具
 
 ## 1. cv_bridge

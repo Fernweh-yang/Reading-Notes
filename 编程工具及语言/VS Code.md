@@ -39,12 +39,38 @@ ctrl+shift+i
 
 ctrl+shift+p
 
+# C++ Debug 
 
-# Debug 设置
+## 用g++/gcc编译+debug
 
 [官网教程](https://code.visualstudio.com/docs/cpp/config-linux)
 
-## 0. pkg-config
+debug流程：
+
+1. 在vs code中安装c++ extension
+
+2. 确保gcc已经安装
+
+   - 终端输入`gcc -v`
+
+   - 如果没装:
+
+     ```shell
+     sudo apt-get update
+     sudo apt-get install build-essential gdb
+     ```
+
+3. 在项目的工作目录下创建配置目录`.vscode`，然后创建3个文件:
+
+   - `tasks.json` (compiler build settings)
+   - `launch.json` (debugger settings)
+   - `c_cpp_properties.json` (compiler path and IntelliSense settings)
+
+   具体配置见下面
+
+4. 配置好后，打上断点，点击右上角的debug c/c++ file即可
+
+### 0. pkg-config
 
 在`g++`命令中，`pkg-config`是一个用于检索已安装的软件包的工具。它通常与编译和链接过程一起使用，以帮助获取所需的编译选项和库路径。
 
@@ -55,7 +81,7 @@ pkg-config --cflags <package>    # 获取指定软件包的编译选项
 pkg-config --libs <package>      # 获取指定软件包的库路径
 ```
 
-## 1. tasks.json
+### 1. tasks.json
 
 用来预定义设置一些任务，让vscode去自动完成。
 
@@ -112,7 +138,7 @@ pkg-config --libs <package>      # 获取指定软件包的库路径
 }
 ```
 
-## 2. lanuch.json
+### 2. lanuch.json
 
 这个是调试启动文件（launch configuration）
 
@@ -124,8 +150,8 @@ pkg-config --libs <package>      # 获取指定软件包的库路径
         "name": "C/C++: g++ build and debug active file",
         "type": "cppdbg",
         "request": "launch",
-        "program": "${fileDirname}/${fileBasenameNoExtension}",
-        "args": [],
+        "program": "${fileDirname}/${fileBasenameNoExtension}", // 编译出来可执行文件所在目录
+        "args": [],	// 传参数
         "stopAtEntry": false,
         "cwd": "${fileDirname}",//通常应该是${workspaceFolder}，但这里读不到urdf不知道为什么
         "environment": [],
@@ -145,7 +171,7 @@ pkg-config --libs <package>      # 获取指定软件包的库路径
   }
 ```
 
-## 3. c_cpp_properties.json
+### 3. c_cpp_properties.json
 
 用于指定代码路径。
 
@@ -176,6 +202,102 @@ pkg-config --libs <package>      # 获取指定软件包的库路径
   "version": 4
 }
 ```
+
+## 用CMAKE编译
+
+- ！！！！！注意：
+
+   1. CMakeLists.txt中要设置为Debug模式：
+
+      ```
+      set(CMAKE_BUILD_TYPE Debug)
+      ```
+
+  2. 不要器用优化模式：
+
+     ```
+     set(CMAKE_CXX_FLAGS "-std=c++14 -O0 -Werror=return-type")
+     ```
+
+     - `-O0`：不进行优化。这是默认级别，在这种模式下，编译器会生成最简单、最直接的代码，便于调试，因为所有变量和代码结构都保留在最终的生成代码中。
+     - `-O1`：启用基本优化。编译器会进行一些轻量级的优化，不会显著增加编译时间。
+     - `-O2`：启用大多数优化。这是一个常用的优化级别，平衡了优化和编译时间。
+     - `-O3`：启用更高级别的优化。编译器会尝试进行更多的优化，包括时间和空间上的优化。这可能会增加编译时间，但通常会生成运行速度更快的代码。
+     - `-Os`：优化代码以减小生成文件的大小。适用于嵌入式系统或其他需要小型可执行文件的环境。
+     - `-Ofast`：启用所有级别的优化（包括 `-O3`），并忽略严格的标准兼容性。这可能会导致与标准不完全兼容的代码。
+
+- 正常情况下：
+
+  ```
+  mkdir build
+  cd build 
+  cmake ..
+  make -j
+  ```
+
+- vs code装了cmake插件后，进入工程目录后会自动config
+
+  这时候最底下点一下build就可以了
+
+- 进入debug模式有下面两种路径：
+
+### 用cmake插件进入debug
+
+1. 下载了cmake tools的话，左边会有个cmake图表，点击进入
+2. 在project outline中找到想要debug/build文件夹
+3. 右键set as Launch/Debug Target
+4. 右键Debug
+
+如果需要传参数，在.vscode/settings.json中加入:
+
+```
+"cmake.debugConfig": {
+    "args": [
+    	"param1",
+    	"param2",
+    	...
+    ]
+}
+```
+
+### 用launch.json进入debug
+
+1. 点击左边的debug, create a new launch.json
+
+2. 复制如下:
+
+   ```json
+   {
+       "version": "0.2.0",
+       "configurations": [
+         {
+           "name": "C/C++: g++ build and debug active file",
+           "type": "cppdbg",
+           "request": "launch",
+           "program": "${fileDirname}/${fileBasenameNoExtension}", // 编译出来可执行文件所在目录
+           "args": [],	// 传参数
+           "stopAtEntry": false,
+           "cwd": "${fileDirname}",//通常应该是${workspaceFolder}，但这里读不到urdf不知道为什么
+           "environment": [],
+           "externalConsole": false,
+           "MIMode": "gdb",	//使用gdb调试器
+           "miDebuggerPath": "/usr/bin/gdb",
+           "setupCommands": [
+             {
+               "description": "Enable pretty-printing for gdb",
+               "text": "-enable-pretty-printing",
+               "ignoreFailures": true
+             }
+           ],
+           "preLaunchTask": "C/C++: g++ build active file"
+         }
+       ]
+     }
+   ```
+
+3. 点击debug即可
+
+
 
 # ROS Debug
 
