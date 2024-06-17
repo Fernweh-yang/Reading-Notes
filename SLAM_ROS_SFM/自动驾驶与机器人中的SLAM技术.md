@@ -2035,7 +2035,517 @@ Brute-force Nearest Neighbour Search暴力最近邻法是最简单的不用任�
 
 - 用暴力最近邻搜索**k个点**的思路
 
+  1. 对给定点云$\mathcal{X}$和查找点$x_m$，计算$x_m$对所有$\mathcal{X}$点的距离
+  2. 对第一步结果排序
+  3. 选择k个最近的点
+
+- 性能分析：
+
+  - 时间复杂度
+
+    - 如果$x_m$只有一个点，显然复杂度为$O(n)$
+
+    - 如果$x_m$也有n个点，复杂度就成了$O(n^2)$
+
+  - 但由于计算方式简单，不依赖任何复杂的数据结构，所以非常容易并行化。
+
+    而且工程问题中，通常不需要搜索整个目标点云$\mathcal{X}$，可以在预先指定的小范围内搜索，所以工程中也很常用。
+
+  - 而且由于暴力匹配好处是每两个点都会计算匹配，所以结果一定是正确的，后续其他方法就难以保证这一点。
+
+
 ### 2.1+ 案例：暴力最近邻法的代码实现
+
+#### 2.1.1 对比单线程/多线程BFNN
+
+运行结果如下：
+
+```shell
+➜  LiDAR-SLAM-code-comments git:(main) ./bin/test_nn --gtest_filter=CH5_TEST.BFNN     
+Note: Google Test filter = CH5_TEST.BFNN
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from CH5_TEST
+[ RUN      ] CH5_TEST.BFNN
+Failed to find match for field 'intensity'.
+Failed to find match for field 'intensity'.
+I0618 00:36:58.099083 12864 test_nn.cc:37] points: 18869, 18779
+I0618 00:37:07.842880 12864 sys_utils.h:32] 方法 暴力匹配（单线程） 平均调用时间/次数: 1948.73/5 毫秒.
+I0618 00:37:08.768455 12864 sys_utils.h:32] 方法 暴力匹配（多线程） 平均调用时间/次数: 185.104/5 毫秒.
+[       OK ] CH5_TEST.BFNN (10677 ms)
+[----------] 1 test from CH5_TEST (10677 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (10677 ms total)
+[  PASSED  ] 1 test.
+➜  LiDAR-SLAM-code-comm
+```
+
+可以发现对于18000点数的点云，多线程只需要0.185秒，相比单线程的1.948秒快了很多。
+
+#### 2.1.2 GTest测试代码
+
+测试后面要介绍的各种最近邻方法来对比
+
+```c++
+#include <gflags/gflags.h>
+#include <glog/logging.h>
+#include <gtest/gtest.h>
+
+#include <pcl/io/pcd_io.h>
+#include <pcl/search/kdtree.h>
+
+#include "ch5/bfnn.h"
+#include "ch5/gridnn.hpp"
+#include "ch5/kdtree.h"
+#include "ch5/octo_tree.h"
+#include "common/point_cloud_utils.h"
+#include "common/point_types.h"
+#include "common/sys_utils.h"
+
+DEFINE_string(first_scan_path, "./data/ch5/first.pcd", "第一个点云路径");
+DEFINE_string(second_scan_path, "./data/ch5/second.pcd", "第二个点云路径");
+DEFINE_double(ANN_alpha, 1.0, "AAN的比例因子");
+
+TEST(CH5_TEST, BFNN) {
+    sad::CloudPtr first(new sad::PointCloudType), second(new sad::PointCloudType);
+    pcl::io::loadPCDFile(FLAGS_first_scan_path, *first);
+    pcl::io::loadPCDFile(FLAGS_second_scan_path, *second);
+
+    if (first->empty() || second->empty()) {
+        LOG(ERROR) << "cannot load cloud";
+        FAIL();
+    }
+
+    // 降采样：体素栅格滤波
+    // voxel grid 至 0.05
+    sad::VoxelGrid(first);
+    sad::VoxelGrid(second);
+
+    LOG(INFO) << "points: " << first->size() << ", " << second->size();
+
+    // 评价单线程和多线程版本的暴力匹配
+    sad::evaluate_and_call(
+        [&first, &second]() {
+            std::vector<std::pair<size_t, size_t>> matches;
+            sad::bfnn_cloud(first, second, matches);
+        },
+        "暴力匹配（单线程）", 5);
+    sad::evaluate_and_call(
+        [&first, &second]() {
+            std::vector<std::pair<size_t, size_t>> matches;
+            sad::bfnn_cloud_mt(first, second, matches);
+        },
+        "暴力匹配（多线程）", 5);
+
+    SUCCEED();
+}
+
+/**
+ * 评测最近邻的正确性
+ * @param truth 真值
+ * @param esti  估计
+ */
+void EvaluateMatches(const std::vector<std::pair<size_t, size_t>>& truth,
+                     const std::vector<std::pair<size_t, size_t>>& esti) {
+    int fp = 0;  // false-positive，esti存在但truth中不存在
+    int fn = 0;  // false-negative, truth存在但esti不存在
+
+    LOG(INFO) << "truth: " << truth.size() << ", esti: " << esti.size();
+
+    /// 检查某个匹配在另一个容器中存不存在
+    auto exist = [](const std::pair<size_t, size_t>& data, const std::vector<std::pair<size_t, size_t>>& vec) -> bool {
+        return std::find(vec.begin(), vec.end(), data) != vec.end();
+    };
+
+    int effective_esti = 0;
+    for (const auto& d : esti) {
+        if (d.first != sad::math::kINVALID_ID && d.second != sad::math::kINVALID_ID) {
+            effective_esti++;
+
+            if (!exist(d, truth)) {
+                fp++;
+            }
+        }
+    }
+
+    for (const auto& d : truth) {
+        if (!exist(d, esti)) {
+            fn++;
+        }
+    }
+
+    float precision = 1.0 - float(fp) / effective_esti;
+    float recall = 1.0 - float(fn) / truth.size();
+    LOG(INFO) << "precision: " << precision << ", recall: " << recall << ", fp: " << fp << ", fn: " << fn;
+}
+
+TEST(CH5_TEST, GRID_NN) {
+    sad::CloudPtr first(new sad::PointCloudType), second(new sad::PointCloudType);
+    pcl::io::loadPCDFile(FLAGS_first_scan_path, *first);
+    pcl::io::loadPCDFile(FLAGS_second_scan_path, *second);
+
+    if (first->empty() || second->empty()) {
+        LOG(ERROR) << "cannot load cloud";
+        FAIL();
+    }
+
+    // voxel grid 至 0.05
+    sad::VoxelGrid(first);
+    sad::VoxelGrid(second);
+
+    LOG(INFO) << "points: " << first->size() << ", " << second->size();
+
+    std::vector<std::pair<size_t, size_t>> truth_matches;
+    sad::bfnn_cloud(first, second, truth_matches);
+
+    // 对比不同种类的grid
+    sad::GridNN<2> grid0(0.1, sad::GridNN<2>::NearbyType::CENTER), grid4(0.1, sad::GridNN<2>::NearbyType::NEARBY4),
+        grid8(0.1, sad::GridNN<2>::NearbyType::NEARBY8);
+    sad::GridNN<3> grid3(0.1, sad::GridNN<3>::NearbyType::NEARBY6);
+
+    grid0.SetPointCloud(first);
+    grid4.SetPointCloud(first);
+    grid8.SetPointCloud(first);
+    grid3.SetPointCloud(first);
+
+    // 评价各种版本的Grid NN
+    // sorry没有C17的template lambda... 下面必须写的啰嗦一些
+    LOG(INFO) << "===================";
+    std::vector<std::pair<size_t, size_t>> matches;
+    sad::evaluate_and_call(
+        [&first, &second, &grid0, &matches]() { grid0.GetClosestPointForCloud(first, second, matches); },
+        "Grid0 单线程", 10);
+    EvaluateMatches(truth_matches, matches);
+
+    LOG(INFO) << "===================";
+    sad::evaluate_and_call(
+        [&first, &second, &grid0, &matches]() { grid0.GetClosestPointForCloudMT(first, second, matches); },
+        "Grid0 多线程", 10);
+    EvaluateMatches(truth_matches, matches);
+
+    LOG(INFO) << "===================";
+    sad::evaluate_and_call(
+        [&first, &second, &grid4, &matches]() { grid4.GetClosestPointForCloud(first, second, matches); },
+        "Grid4 单线程", 10);
+    EvaluateMatches(truth_matches, matches);
+
+    LOG(INFO) << "===================";
+    sad::evaluate_and_call(
+        [&first, &second, &grid4, &matches]() { grid4.GetClosestPointForCloudMT(first, second, matches); },
+        "Grid4 多线程", 10);
+    EvaluateMatches(truth_matches, matches);
+
+    LOG(INFO) << "===================";
+    sad::evaluate_and_call(
+        [&first, &second, &grid8, &matches]() { grid8.GetClosestPointForCloud(first, second, matches); },
+        "Grid8 单线程", 10);
+    EvaluateMatches(truth_matches, matches);
+
+    LOG(INFO) << "===================";
+    sad::evaluate_and_call(
+        [&first, &second, &grid8, &matches]() { grid8.GetClosestPointForCloudMT(first, second, matches); },
+        "Grid8 多线程", 10);
+    EvaluateMatches(truth_matches, matches);
+
+    LOG(INFO) << "===================";
+    sad::evaluate_and_call(
+        [&first, &second, &grid3, &matches]() { grid3.GetClosestPointForCloud(first, second, matches); },
+        "Grid 3D 单线程", 10);
+    EvaluateMatches(truth_matches, matches);
+
+    LOG(INFO) << "===================";
+    sad::evaluate_and_call(
+        [&first, &second, &grid3, &matches]() { grid3.GetClosestPointForCloudMT(first, second, matches); },
+        "Grid 3D 多线程", 10);
+    EvaluateMatches(truth_matches, matches);
+
+    SUCCEED();
+}
+
+TEST(CH5_TEST, KDTREE_BASICS) {
+    sad::CloudPtr cloud(new sad::PointCloudType);
+    sad::PointType p1, p2, p3, p4;
+    p1.x = 0;
+    p1.y = 0;
+    p1.z = 0;
+
+    p2.x = 1;
+    p2.y = 0;
+    p2.z = 0;
+
+    p3.x = 0;
+    p3.y = 1;
+    p3.z = 0;
+
+    p4.x = 1;
+    p4.y = 1;
+    p4.z = 0;
+
+    cloud->points.push_back(p1);
+    cloud->points.push_back(p2);
+    cloud->points.push_back(p3);
+    cloud->points.push_back(p4);
+
+    sad::KdTree kdtree;
+    kdtree.BuildTree(cloud);
+    kdtree.PrintAll();
+
+    SUCCEED();
+}
+
+TEST(CH5_TEST, KDTREE_KNN) {
+    sad::CloudPtr first(new sad::PointCloudType), second(new sad::PointCloudType);
+    pcl::io::loadPCDFile(FLAGS_first_scan_path, *first);
+    pcl::io::loadPCDFile(FLAGS_second_scan_path, *second);
+
+    if (first->empty() || second->empty()) {
+        LOG(ERROR) << "cannot load cloud";
+        FAIL();
+    }
+
+    // voxel grid 至 0.05
+    sad::VoxelGrid(first);
+    sad::VoxelGrid(second);
+
+    sad::KdTree kdtree;
+    sad::evaluate_and_call([&first, &kdtree]() { kdtree.BuildTree(first); }, "Kd Tree build", 1);
+
+    kdtree.SetEnableANN(true, FLAGS_ANN_alpha);
+
+    LOG(INFO) << "Kd tree leaves: " << kdtree.size() << ", points: " << first->size();
+
+    // 比较 bfnn
+    std::vector<std::pair<size_t, size_t>> true_matches;
+    sad::bfnn_cloud_mt_k(first, second, true_matches);
+
+    // 对第2个点云执行knn
+    std::vector<std::pair<size_t, size_t>> matches;
+    sad::evaluate_and_call([&first, &second, &kdtree, &matches]() { kdtree.GetClosestPointMT(second, matches, 5); },
+                           "Kd Tree 5NN 多线程", 1);
+    EvaluateMatches(true_matches, matches);
+
+    LOG(INFO) << "building kdtree pcl";
+    // 对比PCL
+    pcl::search::KdTree<sad::PointType> kdtree_pcl;
+    sad::evaluate_and_call([&first, &kdtree_pcl]() { kdtree_pcl.setInputCloud(first); }, "Kd Tree build", 1);
+
+    LOG(INFO) << "searching pcl";
+    matches.clear();
+    std::vector<int> search_indices(second->size());
+    for (int i = 0; i < second->points.size(); i++) {
+        search_indices[i] = i;
+    }
+
+    std::vector<std::vector<int>> result_index;
+    std::vector<std::vector<float>> result_distance;
+    sad::evaluate_and_call(
+        [&]() { kdtree_pcl.nearestKSearch(*second, search_indices, 5, result_index, result_distance); },
+        "Kd Tree 5NN in PCL", 1);
+    for (int i = 0; i < second->points.size(); i++) {
+        for (int j = 0; j < result_index[i].size(); ++j) {
+            int m = result_index[i][j];
+            double d = result_distance[i][j];
+            matches.push_back({m, i});
+        }
+    }
+    EvaluateMatches(true_matches, matches);
+
+    LOG(INFO) << "done.";
+
+    SUCCEED();
+}
+
+TEST(CH5_TEST, OCTREE_BASICS) {
+    sad::CloudPtr cloud(new sad::PointCloudType);
+    sad::PointType p1, p2, p3, p4;
+    p1.x = 0;
+    p1.y = 0;
+    p1.z = 0;
+
+    p2.x = 1;
+    p2.y = 0;
+    p2.z = 0;
+
+    p3.x = 0;
+    p3.y = 1;
+    p3.z = 0;
+
+    p4.x = 1;
+    p4.y = 1;
+    p4.z = 0;
+
+    cloud->points.push_back(p1);
+    cloud->points.push_back(p2);
+    cloud->points.push_back(p3);
+    cloud->points.push_back(p4);
+
+    sad::OctoTree octree;
+    octree.BuildTree(cloud);
+    octree.SetApproximate(false);
+    LOG(INFO) << "Octo tree leaves: " << octree.size() << ", points: " << cloud->size();
+
+    SUCCEED();
+}
+
+TEST(CH5_TEST, OCTREE_KNN) {
+    sad::CloudPtr first(new sad::PointCloudType), second(new sad::PointCloudType);
+    pcl::io::loadPCDFile(FLAGS_first_scan_path, *first);
+    pcl::io::loadPCDFile(FLAGS_second_scan_path, *second);
+
+    if (first->empty() || second->empty()) {
+        LOG(ERROR) << "cannot load cloud";
+        FAIL();
+    }
+
+    // voxel grid 至 0.05
+    sad::VoxelGrid(first);
+    sad::VoxelGrid(second);
+
+    sad::OctoTree octree;
+    sad::evaluate_and_call([&first, &octree]() { octree.BuildTree(first); }, "Octo Tree build", 1);
+
+    octree.SetApproximate(true, FLAGS_ANN_alpha);
+    LOG(INFO) << "Octo tree leaves: " << octree.size() << ", points: " << first->size();
+
+    /// 测试KNN
+    LOG(INFO) << "testing knn";
+    std::vector<std::pair<size_t, size_t>> matches;
+    sad::evaluate_and_call([&first, &second, &octree, &matches]() { octree.GetClosestPointMT(second, matches, 5); },
+                           "Octo Tree 5NN 多线程", 1);
+
+    LOG(INFO) << "comparing with bfnn";
+    /// 比较真值
+    std::vector<std::pair<size_t, size_t>> true_matches;
+    sad::bfnn_cloud_mt_k(first, second, true_matches);
+    EvaluateMatches(true_matches, matches);
+
+    LOG(INFO) << "done.";
+
+    SUCCEED();
+}
+
+int main(int argc, char** argv) {
+    // 初始化 Google glog 库。这一步通常在程序启动时调用，参数 argv[0] 是程序的名称，用于在日志文件中标识该程序。
+    google::InitGoogleLogging(argv[0]);
+    // 设置日志输出的阈值。此行代码指定日志级别为 google::INFO 及其以上（即 INFO、WARNING、ERROR 和 FATAL）会被输出到标准错误（stderr）。
+    FLAGS_stderrthreshold = google::INFO;
+    // 启用彩色日志输出到标准错误（stderr）。
+    FLAGS_colorlogtostderr = true;
+
+    // 初始化 Google Test 框架,解析命令行参数，在命令行可以使用如下参数：
+    // --gtest_filter：指定要运行的测试用例。
+    // --gtest_output：设置输出格式和文件，例如生成 XML 报告。
+    // --gtest_repeat：重复运行测试的次数。
+    testing::InitGoogleTest(&argc, argv);
+    // 解析命令行标志，参数保存在全局的 FLAGS_ 变量中。
+    // 如：DEFINE_double(ANN_alpha, 1.0, "AAN的比例因子");就可以使用FLAGS_ANN_alpha这个变量了
+    google::ParseCommandLineFlags(&argc, &argv, true);
+    // 执行所有定义的测试用例TEST(TestCaseName, TestName)，返回值为 0 表示所有测试通过，非零表示至少一个测试失败
+    return RUN_ALL_TESTS();
+}
+
+```
+
+#### 2.1.3 暴力最近邻实现
+
+```c++
+//
+// Created by xiang on 2021/8/18.
+//
+
+#include "ch5/bfnn.h"
+#include <execution>
+
+namespace sad {
+// ********* 单点暴力近邻，单线程 *********
+int bfnn_point(CloudPtr cloud, const Vec3f& point) {
+    // 用匿名函数计算单点和目标点云所有点的距离
+    // 用std::min_element找出最小值
+    return std::min_element(cloud->points.begin(), cloud->points.end(),
+                            [&point](const PointType& pt1, const PointType& pt2) -> bool {
+                                return (pt1.getVector3fMap() - point).squaredNorm() <
+                                       (pt2.getVector3fMap() - point).squaredNorm();
+                            }) -
+           cloud->points.begin();
+}
+
+// ********* 单点暴力K近邻，单线程 *********
+std::vector<int> bfnn_point_k(CloudPtr cloud, const Vec3f& point, int k) {
+    struct IndexAndDis {
+        IndexAndDis() {}
+        IndexAndDis(int index, double dis2) : index_(index), dis2_(dis2) {}
+        int index_ = 0;
+        double dis2_ = 0;
+    };
+
+    std::vector<IndexAndDis> index_and_dis(cloud->size());
+    for (int i = 0; i < cloud->size(); ++i) {
+        index_and_dis[i] = {i, (cloud->points[i].getVector3fMap() - point).squaredNorm()};
+    }
+    // 计算完所有距离后，用排序算法找出k个最近的
+    std::sort(index_and_dis.begin(), index_and_dis.end(),
+              [](const auto& d1, const auto& d2) { return d1.dis2_ < d2.dis2_; });
+    std::vector<int> ret;
+    std::transform(index_and_dis.begin(), index_and_dis.begin() + k, std::back_inserter(ret),
+                   [](const auto& d1) { return d1.index_; });
+    return ret;
+}
+
+// ********* 点云暴力近邻，多线程 *********
+void bfnn_cloud_mt(CloudPtr cloud1, CloudPtr cloud2, std::vector<std::pair<size_t, size_t>>& matches) {
+    // 先生成索引
+    std::vector<size_t> index(cloud2->size());
+    // 使用 C++17 标准库中的并行算法（std::for_each）来实现多线程并行化
+    // 并行的充索引向量
+    std::for_each(index.begin(), index.end(), [idx = 0](size_t& i) mutable { i = idx++; });
+
+    matches.resize(index.size());
+    // std::execution::par_unseq 执行策略，允许并行和无序执行
+    // 并行的计算每个点2：second在点1:first中最近的点
+    std::for_each(std::execution::par_unseq, index.begin(), index.end(), [&](auto idx) {
+        matches[idx].second = idx;
+        matches[idx].first = bfnn_point(cloud1, ToVec3f(cloud2->points[idx]));
+    });
+}
+
+// ********* 点云暴力近邻，单线程 *********
+void bfnn_cloud(CloudPtr cloud1, CloudPtr cloud2, std::vector<std::pair<size_t, size_t>>& matches) {
+    // 单线程版本
+    std::vector<size_t> index(cloud2->size());
+    std::for_each(index.begin(), index.end(), [idx = 0](size_t& i) mutable { i = idx++; });
+
+    matches.resize(index.size());
+    // std::execution::seq是std::for_each的单线程策略
+    std::for_each(std::execution::seq, index.begin(), index.end(), [&](auto idx) {
+        matches[idx].second = idx;
+        matches[idx].first = bfnn_point(cloud1, ToVec3f(cloud2->points[idx]));
+    });
+}
+
+// ********* 点云暴力k近邻，多线程 *********
+void bfnn_cloud_mt_k(CloudPtr cloud1, CloudPtr cloud2, std::vector<std::pair<size_t, size_t>>& matches, int k) {
+    // 先生成索引
+    std::vector<size_t> index(cloud2->size());
+    std::for_each(index.begin(), index.end(), [idx = 0](size_t& i) mutable { i = idx++; });
+
+    // 并行化for_each
+    matches.resize(index.size() * k);
+    std::for_each(std::execution::par_unseq, index.begin(), index.end(), [&](auto idx) {
+        // 调用单点暴力K近邻，单线程 
+        auto v = bfnn_point_k(cloud1, ToVec3f(cloud2->points[idx]), k);
+        for (int i = 0; i < v.size(); ++i) {
+            matches[idx * k + i].first = v[i];
+            matches[idx * k + i].second = idx;
+        }
+    });
+}
+
+}  // namespace sad
+
+```
+
+
 
 ### 2.2 栅格/体素最近邻
 

@@ -474,7 +474,7 @@ p40
    - Da die aufrufende Funktion warten muss, bis die aufgerufene Funktion das Ergebnis zurückliefert, wächst der call stack stetig an.
    - Erst wenn die aufgerufenen Funktionen ihren Wert zurückliefern, werden die Funktionen und ihre Daten vom Stack entfernt.
 
-# C++11常用特性：
+# C++11常用特性
 
 需要详细介绍的见c++杂记
 
@@ -602,6 +602,220 @@ using Base::Base; // 继承 Base 的构造函数
 };
 
 ```
+
+# C++17常用特性
+
+## 1. 多线程并行化`std::for_each`
+
+### 基本语法
+
+```c++
+for_each( policy, InputIt first, InputIt last, UnaryFunction f );
+```
+
+- `policy`: 执行策略
+- `first`：指向要处理的第一个元素的迭代器。
+- `last`：指向要处理的最后一个元素的下一个位置的迭代器。
+- `f`：一个接受一个参数（迭代器指向的元素）的函数对象或函数指针。函数对象应该返回 `void`，或者返回类型可以被忽略。
+
+### 3种执行策略
+
+C++17 引入了3种执行策略，用于控制标准库算法（如 `std::for_each`）的执行方式：
+
+```c++
+#include <iostream>
+#include <vector>
+#include <algorithm>
+#include <execution>
+
+void print_vector(const std::vector<int>& vec) {
+    for (int n : vec) {
+        std::cout << n << " ";
+    }
+    std::cout << std::endl;
+}
+
+int main() {
+    std::vector<int> vec = {1, 2, 3, 4, 5};
+
+    // 顺序执行（单线程）
+    std::for_each(std::execution::seq, vec.begin(), vec.end(), [](int& n) { n *= 2; });
+    std::cout << "After sequential execution: ";
+    print_vector(vec);
+
+    // 并行执行
+    std::for_each(std::execution::par, vec.begin(), vec.end(), [](int& n) { n *= 2; });
+    std::cout << "After parallel execution: ";
+    print_vector(vec);
+
+    // 并行和无序执行,允许对硬件进行最大化优化。
+    std::for_each(std::execution::par_unseq, vec.begin(), vec.end(), [](int& n) { n *= 2; });
+    std::cout << "After parallel and unsequenced execution: ";
+    print_vector(vec);
+
+    return 0;
+}
+
+```
+
+## 2. `auto`关键字
+
+相比c++11, auto推导的规则更加直观：
+
+```c++
+// c++11 
+// 会全都推导为std::initializer_list<int>
+auto x3{ 1, 2 }; // std::initializer_list<int>
+auto x4 = { 3 }; // decltype(x4) is std::initializer_list<int>
+auto x5{ 3 };    // std::initializer_list<int>
+
+// c++17
+// 会推导为我们直观认为的
+auto x3{ 1, 2 }; // error: not a single element
+auto x4 = { 3 }; // decltype(x4) is std::initializer_list<int>
+auto x5{ 3 };    // decltype(x5) is int
+```
+
+## 3. `namespace嵌套`
+
+```c++
+// 以前
+namespace A {
+    namespace B {
+        namespace C {
+            void func();
+        }
+    }
+}
+
+// c++17
+namespace A::B::C {
+    void func();
+}
+```
+
+## 4. `lambda表达式`
+
+- lambda也是c++11中引入的，在C++11中，lambda表达式只能用捕获this，this是当前对象的一个只读的引用。 
+- 在C++17中，可以捕获*this, *this是当前对象的一个拷贝，捕获当前对象的拷贝，能够确保当前对象释放后， lambda表达式能安全的调用this中的变量和方法
+
+## 5. `from_chars`函数和`to_chars`
+
+```c++
+// 字符转数字
+std::array<char, 3> str{"42"};
+int result;
+std::from_chars( str.data(), str.data()+str.size(),result );
+std::cout << result << std::endl;
+
+// 数字转字符
+// p是填充到str以后的最后一个迭代器
+if(auto [p, ec] = std::to_chars(str.data(), str.data() + str.size(), 425);
+   ec == std::errc()){
+    if(p == str.end()){
+        std::cout << "hello world\n";
+    }
+        std::cout << std::string_view(str.data(), p - str.data());
+}
+输出：
+42
+hello world
+425
+```
+
+## 6. 结构化绑定
+
+结构化绑定是指将array、tuple或struct的成员绑定到一组变量*上的语法，最常用的场景是在遍历map/unordered_map时不用再声明一个中间变量了:
+
+```c++
+// 以前
+for(const auto& kv: map){
+  const auto& key = kv.first;
+  const auto& value = kv.second;
+  // ...
+}
+
+// c++17
+for(const auto& [key, value]: map){
+  // ...
+}
+```
+
+需要注意的是，结构化绑定的结果并不是变量，c++标准称之为名字/别名，这也导致它们不允许被lambda捕获，但是gcc并没有遵循c++标准，所以以下代码在gcc可以编译，clang则编译不过。
+
+```c++
+for(const auto& [key, value]: map){
+    [&key, &value]{
+        std::cout << key << ": " << value << std::endl;
+    }();
+}
+```
+
+在clang环境下，可以在lambda表达式捕获时显式引入一个引用变量通过编译：
+
+```c++
+for(const auto& [key, value]: map){
+    [&key = key, &value = value]{
+        std::cout << key << ": " << value << std::endl;
+    }();
+}
+```
+
+但是这条限制在c++20中已经被删除，所以在c++20标准中gcc和clang都可以捕获结构化绑定的对象了。上述第一种写法在c++20里都是ok的。
+
+## 7. `std::tuple`的隐式推导
+
+在c++17以前，构造std::pair/std::tuple时必须指定数据类型或使用std::make_pair/std::make_tuple函数
+
+c++17为std::pair/std::tuple新增了推导规则，可以不再显示指定类型。
+
+```c++
+// 以前
+std::pair<int, std::string> p1{3.14, "pi"s}; // 指定数据类型
+auto p1 = std::make_pair(3.14, "pi"s);		 // 或使用std::make_pair/std::make_tuple函数
+
+// c++17
+std::pair p3{3.14, "pi"s};					 // 现在直接定义
+```
+
+## 8. 编译期判断`if  constexpr`
+
+if constexpr语句是编译期的if判断语句，在C++17以前做编译期的条件判断往往通过复杂SFINAE机制或模版重载实现，甚至嫌麻烦的时候直接放到运行时用if判断，造成性能损耗。
+
+if constexpr大大缓解了这个问题。比如我想实现一个函数将不同类型的输入转化为字符串，在c++17之前需要写三个函数去实现，而c++17只需要一个函数。
+
+- 以前
+
+  ```c++
+  // pre c++17
+  template <typename T>
+  std::string convert(T input){
+      return std::to_string(input);
+  }
+  
+  // const char*和string进行特殊处理
+  std::string convert(const char* input){
+      return input;
+  }
+  std::string convert(std::string input){
+      return input;
+  }
+  ```
+
+- c++17
+
+  ```c++
+  // c++17
+  template <typename T>
+  std::string convert(T input) {
+      if constexpr (std::is_same_v<T, const char*> ||
+                    std::is_same_v<T, std::string>) {
+          return input;
+      } else {
+          return std::to_string(input);
+      }
+  }
+  ```
 
 # C++杂记
 
