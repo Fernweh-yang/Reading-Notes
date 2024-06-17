@@ -1715,9 +1715,75 @@ $$
 
 ### 1.2 案例：点云的表达方式
 
-点云是最基本的三维结构表达方式，也是多数激光雷达向外输出的数据形式。
+点云是最基本的三维结构表达方式，也是多数激光雷达向外输出的数据形式。他们是一组欧氏空间中的笛卡尔坐标。
 
 数组可以用来表示最基本的点云，但通常点云还会携带反射率、所属线束、RGB颜色等信息，因此最常用的是定义一个点云结构体。
+
+可视化点云可以用：pcl_viewer，pcl库代码实现，cloudcompare软件
+
+#### 1.2.1 pcl_viewer可视化点云
+
+1. 下载pcl工具库
+
+   ```
+   sudo apt-get install  pcl-tools
+   ```
+
+2. 可视化
+
+   ```
+   pcl_viewer ./data/xxx.pcd
+   ```
+
+#### 1.2.2 pcl库可视化点云
+
+```c++
+#include <gflags/gflags.h>
+#include <glog/logging.h>
+
+#include <pcl/io/pcd_io.h>
+#include <pcl/point_cloud.h>
+#include <pcl/point_types.h>
+#include <pcl/visualization/pcl_visualizer.h>
+
+using PointType = pcl::PointXYZI;
+using PointCloudType = pcl::PointCloud<PointType>;
+
+DEFINE_string(pcd_path, "./data/ch5/map_example.pcd", "点云文件路径");
+
+/// 本程序可用于显示单个点云，演示PCL的基本用法
+/// 实际上就是调用了pcl的可视化库，类似于pcl_viewer
+int main(int argc, char** argv) {
+    google::InitGoogleLogging(argv[0]);
+    FLAGS_stderrthreshold = google::INFO;
+    FLAGS_colorlogtostderr = true;
+    google::ParseCommandLineFlags(&argc, &argv, true);
+
+    if (FLAGS_pcd_path.empty()) {
+        LOG(ERROR) << "pcd path is empty";
+        return -1;
+    }
+
+    // 读取点云
+    PointCloudType::Ptr cloud(new PointCloudType);
+    pcl::io::loadPCDFile(FLAGS_pcd_path, *cloud);
+
+    if (cloud->empty()) {
+        LOG(ERROR) << "cannot load cloud file";
+        return -1;
+    }
+
+    LOG(INFO) << "cloud points: " << cloud->size();
+
+    // visualize
+    pcl::visualization::PCLVisualizer viewer("cloud viewer");
+    pcl::visualization::PointCloudColorHandlerGenericField<PointType> handle(cloud, "z");  // 使用高度来着色
+    viewer.addPointCloud<PointType>(cloud, handle);
+    viewer.spin();
+
+    return 0;
+}
+```
 
 ### 1.3 Packet数据包的表达
 
@@ -1737,6 +1803,218 @@ $$
 
 ### 1.4 案例：地图表达方式BEV和range image
 
+#### 1.4.1 俯视图(鸟瞰图，Bird-eye View)
+
+- 在室外地图中非常常见，希望用栅格地图和2D标注的话就需要用到BEV, 但3D转2D显然丢弃了点云的高度信息
+
+- 下面的代码用OpenCV实现将.PCD的点云坐标转换为图像坐标。其中坐标为x,y,z的点云落在图像的u,v处，他们应该满足：
+  $$
+  \begin{cases}
+  u=(x-c_x)/r+I_x \\
+  v=(y-c_y)/r+I_y
+  \end{cases}\tag{1.4.1.1}
+  $$
+
+  - $r$：分辨率，确定每个像素对应多少米的距离
+  - $c_x,c_y$：点云的中心
+  - $I_x,I_y$：图像的中心
+
+- 代码实现：
+
+  ```c++
+  #include <gflags/gflags.h>
+  #include <glog/logging.h>
+  
+  #include <pcl/io/pcd_io.h>
+  #include <pcl/point_cloud.h>
+  #include <pcl/point_types.h>
+  
+  #include <opencv2/core/core.hpp>
+  #include <opencv2/highgui/highgui.hpp>
+  
+  using PointType = pcl::PointXYZI;
+  using PointCloudType = pcl::PointCloud<PointType>;
+  
+  DEFINE_string(pcd_path, "./data/ch5/map_example.pcd", "点云文件路径");
+  DEFINE_double(image_resolution, 0.1, "俯视图分辨率");
+  DEFINE_double(min_z, 0.2, "俯视图最低高度");
+  DEFINE_double(max_z, 2.5, "俯视图最高高度");
+  
+  /// 本节演示如何将一个点云转换为俯视图像
+  void GenerateBEVImage(PointCloudType::Ptr cloud) {
+      // ********* 1. 计算点云边界 *********
+      auto minmax_x = std::minmax_element(cloud->points.begin(), cloud->points.end(),
+                                          [](const PointType& p1, const PointType& p2) { return p1.x < p2.x; });
+      auto minmax_y = std::minmax_element(cloud->points.begin(), cloud->points.end(),
+                                          [](const PointType& p1, const PointType& p2) { return p1.y < p2.y; });
+      double min_x = minmax_x.first->x;
+      double max_x = minmax_x.second->x;
+      double min_y = minmax_y.first->y;
+      double max_y = minmax_y.second->y;
+  	
+      // FLAGS_image_resolution是自定义的俯视图分辨率  
+      const double inv_r = 1.0 / FLAGS_image_resolution;
+  
+      const int image_rows = int((max_y - min_y) * inv_r);
+      const int image_cols = int((max_x - min_x) * inv_r);
+  	
+      // 点云中心
+      float x_center = 0.5 * (max_x + min_x);
+      float y_center = 0.5 * (max_y + min_y);
+      // 图像中心
+      float x_center_image = image_cols / 2;
+      float y_center_image = image_rows / 2;
+  
+      // ********* 2. 生成图像 *********
+      cv::Mat image(image_rows, image_cols, CV_8UC3, cv::Scalar(255, 255, 255));
+  	// 根据1.4.1.1式计算每一个点云在图像上的坐标
+      for (const auto& pt : cloud->points) {
+          int x = int((pt.x - x_center) * inv_r + x_center_image);
+          int y = int((pt.y - y_center) * inv_r + y_center_image);
+          // 认为高度在min_z=0.2到max_z=2.5米(更具车辆高度定)范围内的障碍物是有效的
+          if (x < 0 || x >= image_cols || y < 0 || y >= image_rows || pt.z < FLAGS_min_z || pt.z > FLAGS_max_z) {
+              continue;
+          }
+  
+          image.at<cv::Vec3b>(y, x) = cv::Vec3b(227, 143, 79);
+      }
+  
+      cv::imwrite("./bev.png", image);
+  }
+  
+  int main(int argc, char** argv) {
+      google::InitGoogleLogging(argv[0]);
+      FLAGS_stderrthreshold = google::INFO;
+      FLAGS_colorlogtostderr = true;
+      google::ParseCommandLineFlags(&argc, &argv, true);
+  
+      if (FLAGS_pcd_path.empty()) {
+          LOG(ERROR) << "pcd path is empty";
+          return -1;
+      }
+  
+      // 读取点云
+      PointCloudType::Ptr cloud(new PointCloudType);
+      pcl::io::loadPCDFile(FLAGS_pcd_path, *cloud);
+  
+      if (cloud->empty()) {
+          LOG(ERROR) << "cannot load cloud file";
+          return -1;
+      }
+  
+      LOG(INFO) << "cloud points: " << cloud->size();
+      GenerateBEVImage(cloud);
+  
+      return 0;
+  }
+  ```
+
+#### 1.4.2 距离图(Range Image)
+
+- Range Image和RGBD相机的思路一致：
+
+  - RGBD：为了保障深度图和彩色图的一致性，会把点云按照彩色图像的参数投影到彩色相机中。
+  - Range Image：将激光点云投影到某个虚拟的相机中去，有两种投影方式：
+    1. 取图像的横坐标为激光雷达的方位角，纵坐标取俯仰角。
+    2. 雷达每根线对应的俯仰角为横坐标，线数为纵坐标。
+
+- 代码实现：
+
+  ```c++
+  #include <gflags/gflags.h>
+  #include <glog/logging.h>
+  
+  #include <pcl/io/pcd_io.h>
+  #include <pcl/point_cloud.h>
+  #include <pcl/point_types.h>
+  
+  #include <opencv2/opencv.hpp>
+  
+  using PointType = pcl::PointXYZI;
+  using PointCloudType = pcl::PointCloud<PointType>;
+  
+  DEFINE_string(pcd_path, "./data/ch5/scan_example.pcd", "点云文件路径");
+  DEFINE_double(azimuth_resolution_deg, 0.3, "方位角分辨率（度）");
+  DEFINE_int32(elevation_rows, 16, "俯仰角对应的行数");
+  DEFINE_double(elevation_range, 15.0, "俯仰角范围");  // VLP-16 上下各15度范围
+  DEFINE_double(lidar_height, 1.128, "雷达安装高度");
+  
+  void GenerateRangeImage(PointCloudType::Ptr cloud) {
+      // ******** 1. 设置要生成的距离图尺寸 ********
+      // 列数：水平为360度，按分辨率切分即可
+      int image_cols = int(360 / FLAGS_azimuth_resolution_deg); 
+      // 行数：俯仰角对应的行数为雷达的线数
+      int image_rows = FLAGS_elevation_rows;                     
+      LOG(INFO) << "range image: " << image_rows << "x" << image_cols;
+  
+      // 我们生成一个HSV图像以更好地显示图像
+      cv::Mat image(image_rows, image_cols, CV_8UC3, cv::Scalar(0, 0, 0));
+  	// elevation分辨率：反映了数据集中的每一个高程值所代表的地理面积的大小。
+      double ele_resolution = FLAGS_elevation_range * 2 / FLAGS_elevation_rows;  
+  	
+      // ******** 2. 生成距离图 ********
+      for (const auto& pt : cloud->points) {
+          // 计算方位角（azimuth）：点在xy平面上的投影与正x轴之间的夹角。
+          double azimuth = atan2(pt.y, pt.x) * 180 / M_PI;
+          // 计算水平距离（range）
+          double range = sqrt(pt.x * pt.x + pt.y * pt.y);
+          // 计算仰角（elevation）：点相对于xy平面的高度
+          double elevation = asin((pt.z - FLAGS_lidar_height) / range) * 180 / M_PI;
+  
+          // 将方位角调整为 0 到 360 度范围
+          if (azimuth < 0) {
+              azimuth += 360;
+          }
+  		// 计算图像的列坐标（x），对应方位角
+          int x = int(azimuth / FLAGS_azimuth_resolution_deg);       
+          // 计算图像的行坐标（y），对应仰角
+          int y = int((elevation + FLAGS_elevation_range) / ele_resolution + 0.5);
+  		 // 检查坐标是否在图像范围内
+          if (x >= 0 && x < image.cols && y >= 0 && y < image.rows) {
+              // 在图像上绘制点，颜色由距离决定
+              image.at<cv::Vec3b>(y, x) = cv::Vec3b(uchar(range / 100 * 255.0), 255, 127);
+          }
+      }
+  
+      // 沿Y轴翻转，因为我们希望Z轴朝上时Y朝上
+      cv::Mat image_flipped;
+      cv::flip(image, image_flipped, 0);
+  
+      // hsv to rgb
+      cv::Mat image_rgb;
+      cv::cvtColor(image_flipped, image_rgb, cv::COLOR_HSV2BGR);
+      cv::imwrite("./range_image.png", image_rgb);
+  }
+  
+  int main(int argc, char** argv) {
+      google::InitGoogleLogging(argv[0]);
+      FLAGS_stderrthreshold = google::INFO;
+      FLAGS_colorlogtostderr = true;
+      google::ParseCommandLineFlags(&argc, &argv, true);
+  
+      if (FLAGS_pcd_path.empty()) {
+          LOG(ERROR) << "pcd path is empty";
+          return -1;
+      }
+  
+      // 读取点云
+      PointCloudType::Ptr cloud(new PointCloudType);
+      pcl::io::loadPCDFile(FLAGS_pcd_path, *cloud);
+  
+      if (cloud->empty()) {
+          LOG(ERROR) << "cannot load cloud file";
+          return -1;
+      }
+  
+      LOG(INFO) << "cloud points: " << cloud->size();
+      GenerateRangeImage(cloud);
+  
+      return 0;
+  }
+  ```
+
+  
+
 ## 2. 最近邻问题
 
 最近邻问题是许多点云问题的基本问题，问题描述为：
@@ -1748,6 +2026,14 @@ $$
 3. 与它的距离小于固定范围r的点有哪些？ - > 范围查找 range search
 
 ### 2.1 暴力最近邻法
+
+Brute-force Nearest Neighbour Search暴力最近邻法是最简单的不用任何辅助的数据结构。
+
+- 用暴力最近邻搜索**一个点**的思路：
+
+  给定点云$\mathcal{X}$和待查找点$x_m$，计算$x_m$和 $\mathcal{X}$中每个点的距离，并给出最小距离
+
+- 用暴力最近邻搜索**k个点**的思路
 
 ### 2.1+ 案例：暴力最近邻法的代码实现
 
