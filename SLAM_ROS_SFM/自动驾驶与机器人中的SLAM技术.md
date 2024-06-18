@@ -2087,6 +2087,10 @@ I0618 00:37:08.768455 12864 sys_utils.h:32] 方法 暴力匹配（多线程） �
 
 测试后面要介绍的各种最近邻方法来对比
 
+```
+./bin/test_nn --gtest_filter=CH5_TEST.BFNN
+```
+
 ```c++
 #include <gflags/gflags.h>
 #include <glog/logging.h>
@@ -2453,10 +2457,6 @@ int main(int argc, char** argv) {
 #### 2.1.3 暴力最近邻实现
 
 ```c++
-//
-// Created by xiang on 2021/8/18.
-//
-
 #include "ch5/bfnn.h"
 #include <execution>
 
@@ -2562,19 +2562,76 @@ void bfnn_cloud_mt_k(CloudPtr cloud1, CloudPtr cloud2, std::vector<std::pair<siz
 
     这是个经验值，很重要。格子太大点就多，导致计算效率下降。格子太小，格子数量太多，最近邻可能也落不到上下左右4个格子中。
 
-  - 因为不一定能找到最近邻，所以除了暴力紧邻法外，所有的算法除了评估计算效率外还要评估它的正确性。
-
 - 三维体素法：
 
   将空间划分为三维的体素，然后在相邻体素中查找。
+  
+- 算法逻辑为：
+
+  1. 计算给定点所在的栅格
+  2. 根据最近邻的定义，查找附近的栅格
+  3. 对第2步栅格内所有的点云进行暴力近邻搜索，找到最近邻
+
+- 因为不一定能找到最近邻，所以除了暴力紧邻法外，所有的算法除了评估计算效率外还要评估它的正确性。
+  $$
+  \begin{align}
+  Precision = 1-\frac{FP}{m}\\
+  Recall = 1-\frac{FN}{n}
+  \end{align}
+  $$
+
+  - FP: False Positive假阳性，检测出来时最近邻实际上不是最近邻的次数
+  - FN: False Negative假阴性，没检测出来的最近邻次数
+  - m: 总共计算的最近邻次数
+  - n：真值中总共给出的最近邻
 
 ### 2.2+ 案例：栅格和体素法实现
 
-#### 2.2.1 栅格体素近邻
+#### 2.2.1 用于存放栅格数据的哈希表
+
+栅格数据存放在一个哈希表unordered_map中，
+
+之所以用哈希表，是因为点云是稀疏的，对应的栅格也是稀疏的，所以在没有数据的地方不必保留空的栅格。
+
+其中空间哈希值的计算根据论文为：用各维度数据乘以一个大质数，再求异或，最后对大整数取模。假设空间点$\mathbf{p}=[p_x,p_y,p_z]$，3个大质数为$n_1,n_2,n_3$，大整数为$N$,它的哈希值为：
+$$
+hash(\mathbf{p})=((p_xn_1))\ xor\ (p_yn_2)\ xor\ (p_zn_3))\ mod\ N\tag{2.2.1.1}
+$$
+
+```c++
+// * 存栅格数据的结构
+// 参数1：键，2：值的类型，3：键的哈希值
+std::unordered_map<KeyType, std::vector<size_t>, hash_vec<dim>> grids_; 
+
+// * 模板结构：矢量哈希
+template <int N>
+struct hash_vec {
+    inline size_t operator()(const Eigen::Matrix<int, N, 1>& v) const;
+};
+
+// * 2D和3D的哈希值生成
+// 根据论文 Optimized Spatial Hashing for Collision Detection of Deformable Objects, Matthias Teschner et. al., VMV 2003 实现的哈希函数，即公式2.2.1.1式计算
+// 2D
+template <>
+inline size_t hash_vec<2>::operator()(const Eigen::Matrix<int, 2, 1>& v) const {
+    return size_t(((v[0] * 73856093) ^ (v[1] * 471943)) % 10000000);
+}
+// 3D
+template <>
+inline size_t hash_vec<3>::operator()(const Eigen::Matrix<int, 3, 1>& v) const {
+    return size_t(((v[0] * 73856093) ^ (v[1] * 471943) ^ (v[2] * 83492791)) % 10000000);
+}
+```
+
+#### 2.2.2 栅格体素近邻
 
 使用模板来同时实现二维栅格和三维体素。
 
 ```c++
+//
+// Created by xiang on 2021/8/25.
+//
+
 #ifndef SLAM_IN_AUTO_DRIVING_GRID2D_HPP
 #define SLAM_IN_AUTO_DRIVING_GRID2D_HPP
 
@@ -2589,16 +2646,15 @@ void bfnn_cloud_mt_k(CloudPtr cloud1, CloudPtr cloud2, std::vector<std::pair<siz
 namespace sad {
 
 /**
- * 栅格法最近邻
+ * 栅格法最近邻的模板类:根据维数来选定2D栅格还是3D体素
  * @tparam dim 模板参数，使用2D或3D栅格
- * 根据维数来选定
  */
 template <int dim>
 class GridNN {
    public:
-    using KeyType = Eigen::Matrix<int, dim, 1>;
+    using KeyType = Eigen::Matrix<int, dim, 1>;     // 根据模板参数dim，来确定是2维还是3维的向量
     using PtType = Eigen::Matrix<float, dim, 1>;
-
+    // 用一个枚举类型来定义4种近邻关系
     enum class NearbyType {
         CENTER,  // 只考虑中心
         // for 2D
@@ -2621,24 +2677,25 @@ class GridNN {
         // check dim and nearby
         if (dim == 2 && nearby_type_ == NearbyType::NEARBY6) {
             LOG(INFO) << "2D grid does not support nearby6, using nearby4 instead.";
+            // 近邻关系被定义为枚举类型NearbyType
             nearby_type_ = NearbyType::NEARBY4;
         } else if (dim == 3 && (nearby_type_ != NearbyType::NEARBY6 && nearby_type_ != NearbyType::CENTER)) {
             LOG(INFO) << "3D grid does not support nearby4/8, using nearby6 instead.";
             nearby_type_ = NearbyType::NEARBY6;
         }
-
+        // 根据近邻关系和维度dim，生成对应的近邻相对方位
         GenerateNearbyGrids();
     }
 
     /// 设置点云，建立栅格
     bool SetPointCloud(CloudPtr cloud);
 
-    /// 获取最近邻
+    /// 获取某个点的最近邻
     bool GetClosestPoint(const PointType& pt, PointType& closest_pt, size_t& idx);
 
-    /// 对比两个点云
-    bool GetClosestPointForCloud(CloudPtr ref, CloudPtr query, std::vector<std::pair<size_t, size_t>>& matches);
-    bool GetClosestPointForCloudMT(CloudPtr ref, CloudPtr query, std::vector<std::pair<size_t, size_t>>& matches);
+    /// 对比得到两个点云各个点之间的最近邻
+    bool GetClosestPointForCloud(CloudPtr ref, CloudPtr query, std::vector<std::pair<size_t, size_t>>& matches);    // 单线程
+    bool GetClosestPointForCloudMT(CloudPtr ref, CloudPtr query, std::vector<std::pair<size_t, size_t>>& matches);  // 多线程
 
    private:
     /// 根据最近邻的类型，生成附近网格
@@ -2651,25 +2708,31 @@ class GridNN {
     float inv_resolution_ = 10.0;  // 分辨率倒数
 
     NearbyType nearby_type_ = NearbyType::NEARBY4;
+    // 栅格数据被保存在一个哈希表unordered_map中
+    // 之所以用哈希表，是因为点云是稀疏的，对应的栅格也是稀疏的，所以在没有数据的地方不必保留空的栅格
     std::unordered_map<KeyType, std::vector<size_t>, hash_vec<dim>> grids_;  //  栅格数据
     CloudPtr cloud_;
 
     std::vector<KeyType> nearby_grids_;  // 附近的栅格
 };
 
-// 实现
+// ******* 设置点云，建立栅格 *******
 template <int dim>
 bool GridNN<dim>::SetPointCloud(CloudPtr cloud) {
+    // size_t 是 C++ 中的一个无符号整数类型，用于表示大小和索引。定义在 <cstddef> 头文件中
     std::vector<size_t> index(cloud->size());
+    // std::for_each默认是单线程的顺序执行
     std::for_each(index.begin(), index.end(), [idx = 0](size_t& i) mutable { i = idx++; });
 
     std::for_each(index.begin(), index.end(), [&cloud, this](const size_t& idx) {
         auto pt = cloud->points[idx];
-        auto key = Pos2Grid(ToEigen<float, dim>(pt));
+        auto key = Pos2Grid(ToEigen<float, dim>(pt));   // 得到点云在栅格中的位置
+        // end()返回一个指向哈希表末尾（最后一个元素之后）的迭代器。
+        // 所有find()=end()就是没找到
         if (grids_.find(key) == grids_.end()) {
-            grids_.insert({key, {idx}});
+            grids_.insert({key, {idx}});    // 没找到(即该栅格索引还没建立)，就将新的键值队(栅格索引+点云索引)一起插入
         } else {
-            grids_[key].emplace_back(idx);
+            grids_[key].emplace_back(idx);  // 找到了(即该栅格索引已经建立)，就将新的值(点云索引)归入栅格索引的verctor中去
         }
     });
 
@@ -2678,8 +2741,13 @@ bool GridNN<dim>::SetPointCloud(CloudPtr cloud) {
     return true;
 }
 
+// ******* 空间坐标转到grid，得到空间点在栅格中的位置 *******
 template <int dim>
 Eigen::Matrix<int, dim, 1> GridNN<dim>::Pos2Grid(const Eigen::Matrix<float, dim, 1>& pt) {
+    // 使用表达式链对向量pt进行3次操作
+    // pt.array() 将向量 pt 转换为一个数组，这样可以对向量的每个元素应用元素级别的操作。
+    // round() 是一个元素级别的操作，它将数组中的每个浮点数四舍五入到最近的整数。
+    // template cast<int>() 将四舍五入后的数组中的元素从浮点数类型转换为整数类型。
     return pt.array().template round().template cast<int>();
     // Eigen::Matrix<int, dim, 1> ret;
     // for (int i = 0; i < dim; ++i) {
@@ -2688,12 +2756,19 @@ Eigen::Matrix<int, dim, 1> GridNN<dim>::Pos2Grid(const Eigen::Matrix<float, dim,
     // return ret;
 }
 
+// ******* 近邻关系：生成二维栅格相对位置 *******
 template <>
 void GridNN<2>::GenerateNearbyGrids() {
+    // * 1. 只考虑中心栅格
     if (nearby_type_ == NearbyType::CENTER) {
         nearby_grids_.emplace_back(KeyType::Zero());
+
+    // * 2. 考虑上下左右
     } else if (nearby_type_ == NearbyType::NEARBY4) {
+        // Vec2i = Eigen::Vector2i;
         nearby_grids_ = {Vec2i(0, 0), Vec2i(-1, 0), Vec2i(1, 0), Vec2i(0, 1), Vec2i(0, -1)};
+
+    // * 3. 考虑上下左右+4角
     } else if (nearby_type_ == NearbyType::NEARBY8) {
         nearby_grids_ = {
             Vec2i(0, 0),   Vec2i(-1, 0), Vec2i(1, 0),  Vec2i(0, 1), Vec2i(0, -1),
@@ -2702,22 +2777,30 @@ void GridNN<2>::GenerateNearbyGrids() {
     }
 }
 
+// ******* 近邻关系：生成三维体素相对位置 *******
 template <>
 void GridNN<3>::GenerateNearbyGrids() {
+    // * 1. 只考虑中心体素
     if (nearby_type_ == NearbyType::CENTER) {
         nearby_grids_.emplace_back(KeyType::Zero());
+    
+    // * 2. 考虑上下左右+前后
     } else if (nearby_type_ == NearbyType::NEARBY6) {
+        // KeyType = Eigen::Matrix<int, dim, 1>; 此时dim=3
         nearby_grids_ = {KeyType(0, 0, 0),  KeyType(-1, 0, 0), KeyType(1, 0, 0), KeyType(0, 1, 0),
                          KeyType(0, -1, 0), KeyType(0, 0, -1), KeyType(0, 0, 1)};
     }
 }
 
+// ******* 获取查找点的最近邻 *******
 template <int dim>
 bool GridNN<dim>::GetClosestPoint(const PointType& pt, PointType& closest_pt, size_t& idx) {
     // 在pt栅格周边寻找最近邻
+    // 1. 得到查找点在栅格中的位置
     std::vector<size_t> idx_to_check;
     auto key = Pos2Grid(ToEigen<float, dim>(pt));
 
+    // 2. 根据近邻关系，遍历查找点所在栅格的近邻栅格，将其中的点云加入到idx_to_check
     std::for_each(nearby_grids_.begin(), nearby_grids_.end(), [&key, &idx_to_check, this](const KeyType& delta) {
         auto dkey = key + delta;
         auto iter = grids_.find(dkey);
@@ -2730,6 +2813,7 @@ bool GridNN<dim>::GetClosestPoint(const PointType& pt, PointType& closest_pt, si
         return false;
     }
 
+    // 3. 暴力近邻搜索这些点
     // brute force nn in cloud_[idx]
     CloudPtr nearby_cloud(new PointCloudType);
     std::vector<size_t> nearby_idx;
@@ -2745,6 +2829,7 @@ bool GridNN<dim>::GetClosestPoint(const PointType& pt, PointType& closest_pt, si
     return true;
 }
 
+// ******* 对比得到两个点云各个点之间的最近邻 *******
 template <int dim>
 bool GridNN<dim>::GetClosestPointForCloud(CloudPtr ref, CloudPtr query,
                                           std::vector<std::pair<size_t, size_t>>& matches) {
@@ -2787,9 +2872,81 @@ bool GridNN<dim>::GetClosestPointForCloudMT(CloudPtr ref, CloudPtr query,
 }  // namespace sad
 
 #endif  // SLAM_IN_AUTO_DRIVING_GRID2D_HPP
+
 ```
 
+#### 2.2.3 GTest测试
 
+使用2.1.2的GTest测试代码运行栅格最近邻
+
+```
+./bin/test_nn --gtest_filter=CH5_TEST.GRID_NN
+```
+
+结果为
+
+```shell
+➜  LiDAR-SLAM-code-comments git:(main) ✗ ./bin/test_nn --gtest_filter=CH5_TEST.GRID_NN
+Note: Google Test filter = CH5_TEST.GRID_NN
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from CH5_TEST
+[ RUN      ] CH5_TEST.GRID_NN
+Failed to find match for field 'intensity'.
+Failed to find match for field 'intensity'.
+I0619 02:03:33.486518 35720 test_nn.cc:109] points: 18869, 18779
+I0619 02:03:35.348310 35720 gridnn.hpp:103] grids: 1011
+I0619 02:03:35.349009 35720 gridnn.hpp:103] grids: 1011
+I0619 02:03:35.349695 35720 gridnn.hpp:103] grids: 1011
+I0619 02:03:35.350472 35720 gridnn.hpp:103] grids: 1970
+I0619 02:03:35.350477 35720 test_nn.cc:126] ===================
+I0619 02:03:35.574054 35720 sys_utils.h:32] 方法 Grid0 单线程 平均调用时间/次数: 22.3571/10 毫秒.
+I0619 02:03:35.574079 35720 test_nn.cc:66] truth: 18779, esti: 18017
+I0619 02:03:35.637104 35720 test_nn.cc:92] precision: 0.814897, recall: 0.781831, fp: 3335, fn: 4097
+I0619 02:03:35.637121 35720 test_nn.cc:133] ===================
+I0619 02:03:35.691697 35720 sys_utils.h:32] 方法 Grid0 多线程 平均调用时间/次数: 5.45661/10 毫秒.
+I0619 02:03:35.691730 35720 test_nn.cc:66] truth: 18779, esti: 18779
+I0619 02:03:35.755334 35720 test_nn.cc:92] precision: 0.814897, recall: 0.781831, fp: 3335, fn: 4097
+I0619 02:03:35.755363 35720 test_nn.cc:139] ===================
+I0619 02:03:36.574146 35720 sys_utils.h:32] 方法 Grid4 单线程 平均调用时间/次数: 81.8776/10 毫秒.
+I0619 02:03:36.574162 35720 test_nn.cc:66] truth: 18779, esti: 18589
+I0619 02:03:36.631775 35720 test_nn.cc:92] precision: 0.979235, recall: 0.969327, fp: 386, fn: 576
+I0619 02:03:36.631795 35720 test_nn.cc:145] ===================
+I0619 02:03:36.724370 35720 sys_utils.h:32] 方法 Grid4 多线程 平均调用时间/次数: 9.25685/10 毫秒.
+I0619 02:03:36.724390 35720 test_nn.cc:66] truth: 18779, esti: 18779
+I0619 02:03:36.781195 35720 test_nn.cc:92] precision: 0.979235, recall: 0.969327, fp: 386, fn: 576
+I0619 02:03:36.781210 35720 test_nn.cc:151] ===================
+I0619 02:03:37.999262 35720 sys_utils.h:32] 方法 Grid8 单线程 平均调用时间/次数: 121.804/10 毫秒.
+I0619 02:03:37.999284 35720 test_nn.cc:66] truth: 18779, esti: 18649
+I0619 02:03:38.056667 35720 test_nn.cc:92] precision: 0.996515, recall: 0.989616, fp: 65, fn: 195
+I0619 02:03:38.056694 35720 test_nn.cc:157] ===================
+I0619 02:03:38.198238 35720 sys_utils.h:32] 方法 Grid8 多线程 平均调用时间/次数: 14.1537/10 毫秒.
+I0619 02:03:38.198283 35720 test_nn.cc:66] truth: 18779, esti: 18779
+I0619 02:03:38.267237 35720 test_nn.cc:92] precision: 0.996515, recall: 0.989616, fp: 65, fn: 195
+I0619 02:03:38.267266 35720 test_nn.cc:163] ===================
+I0619 02:03:38.738590 35720 sys_utils.h:32] 方法 Grid 3D 单线程 平均调用时间/次数: 47.1312/10 毫秒.
+I0619 02:03:38.738615 35720 test_nn.cc:66] truth: 18779, esti: 18385
+I0619 02:03:38.794773 35720 test_nn.cc:92] precision: 0.976503, recall: 0.956015, fp: 432, fn: 826
+I0619 02:03:38.794790 35720 test_nn.cc:169] ===================
+I0619 02:03:38.841099 35720 sys_utils.h:32] 方法 Grid 3D 多线程 平均调用时间/次数: 4.63046/10 毫秒.
+I0619 02:03:38.841117 35720 test_nn.cc:66] truth: 18779, esti: 18779
+I0619 02:03:38.897716 35720 test_nn.cc:92] precision: 0.976503, recall: 0.956015, fp: 432, fn: 826
+[       OK ] CH5_TEST.GRID_NN (5418 ms)
+[----------] 1 test from CH5_TEST (5418 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (5418 ms total)
+[  PASSED  ] 1 test.
+```
+
+可以发现：
+
+- 增加要搜索的近邻栅格数，会增加计算时间
+- 多线程比单线程性能提升明显
+- 体素法和栅格法效率持平
+- 在准确率和召回率指标上，三维体素略好于二维栅格
+  - 二维栅格数量越多，准确率召回率越好(高)
+  - 栅格分辨率越高在自动驾驶中从目前的0.1略微提高到0.5也会提高准确率召回率
 
 ### 2.3 二分树与K-d树
 
