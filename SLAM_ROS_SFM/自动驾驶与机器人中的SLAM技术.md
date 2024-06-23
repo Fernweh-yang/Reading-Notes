@@ -3013,7 +3013,55 @@ k-d树的构建时，主要考虑如何对给定点云进行分割。不同分�
 
 ### 2.3+ 案例：K-d树的最近邻实现
 
+k-d树有很多开源实现，下面实现一个简单的k-d树
+
+#### 2.3.1 建树部分
+
+- k-d树节点的结构体，k-d树实现类的定义
+
+  https://github.com/Fernweh-yang/LiDAR-SLAM-code-comments/blob/main/src/ch5/kdtree.h
+
+- k-d树类中各个方法的实现
+
+  https://github.com/Fernweh-yang/LiDAR-SLAM-code-comments/blob/main/src/ch5/kdtree.cc
+
+- 测试建树过程的代码
+
+  ```shell
+  ➜  LiDAR-SLAM-code-comments git:(main) ✗ ./bin/test_nn --gtest_filter=CH5_TEST.KDTREE_BASICS
+  Note: Google Test filter = CH5_TEST.KDTREE_BASICS
+  [==========] Running 1 test from 1 test suite.
+  [----------] Global test environment set-up.
+  [----------] 1 test from CH5_TEST
+  [ RUN      ] CH5_TEST.KDTREE_BASICS
+  I0624 02:01:50.776080 30062 kdtree.cc:229] leaf node: 6, idx: 3
+  I0624 02:01:50.776193 30062 kdtree.cc:229] leaf node: 5, idx: 1
+  I0624 02:01:50.776196 30062 kdtree.cc:231] node: 4, axis: 1, th: 0.5
+  I0624 02:01:50.776206 30062 kdtree.cc:229] leaf node: 3, idx: 2
+  I0624 02:01:50.776207 30062 kdtree.cc:229] leaf node: 2, idx: 0
+  I0624 02:01:50.776208 30062 kdtree.cc:231] node: 1, axis: 1, th: 0.5
+  I0624 02:01:50.776211 30062 kdtree.cc:231] node: 0, axis: 0, th: 0.5
+  [       OK ] CH5_TEST.KDTREE_BASICS (0 ms)
+  [----------] 1 test from CH5_TEST (0 ms total)
+  
+  [----------] Global test environment tear-down
+  [==========] 1 test from 1 test suite ran. (1 ms total)
+  [  PASSED  ] 1 test.
+  ```
+
+#### 2.3.2 kd树的k最近邻
+
+#### 2.3.3 kd树的近似最近邻查找
+
 ### 2.4 四叉树与八叉树
+
+kd树以二叉树作为基本的数据结构。对于2d和3d空间，我们还可以分别使用四叉树(Quad Tree)和八叉树(Octo Tree)。
+
+四叉树一个节点有4个子节点，八叉树则有8个。这对应于物理空间就是，2d空间中是将矩形按中心切成四等分，3d空间中是将三维立方体按中心切成八等分。这种结构自然的定义了切割空间的准则，因此可以向kd树一样对点云构建四叉树或八叉树模型并搜索最近邻。
+
+#### 2.4.1 八叉树的构建
+
+#### 2.4.2 八叉树的查找
 
 ### 2.4+ 案例：八叉树的最近邻
 
