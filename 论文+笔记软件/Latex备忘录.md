@@ -112,6 +112,14 @@ a_1 & a_2 & a_3  \\
 b_1 & b_2 & b_3 \\
 \end{array}\right]$
 
+```
+\left [\begin{array}{cccc}
+e_1 & e_2 & e_3 \\
+a_1 & a_2 & a_3  \\
+b_1 & b_2 & b_3 \\
+\end{array}\right]
+```
+
 # 方程组
 
 $$
