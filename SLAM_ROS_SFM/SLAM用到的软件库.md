@@ -1285,26 +1285,213 @@ Ceres Solver是一个开源C++库，用于建模和解决大型复杂的优化�
 
 ## 2. 使用
 
-- 最小二乘问题如下：
+- ceres可以解决的有边界约束的最小二乘问题形式如下：
   $$
-  \mathop{min}_x \frac{1}{2}\sum_i \rho_i\big(||f_i(x_{i1},\cdots,x_{in})||^2 \big)\ \ s.t.\ l_j<=x_j<=u_j
+  \mathop{min}_x \frac{1}{2}\sum_i \rho_i\big(||f_i(x_{i1},\cdots,x_{in})||^2 \big)\ \ s.t.\ l_j<=x_j<=u_j\tag{1}
   $$
 
+  - $\rho_i\big(||f_i(x_{i1},\cdots,x_{in})||^2$：是一个residualBlock，残差块 
   - $x_1,\cdots,x_n$为优化变量，也称为参数块(Parameter blocks)
-
-  - $f_i$称为代价函数(cost function)，也称为残差块(Residual blocks)
-
-  - $l_j,u_j$是第j个优化变量的上限和下限
-
-    最简单的就是趣正负无穷，即无约束
-
-  - $\rho()$:核函数
+  - $f_i$​称为代价函数(cost function)
+  - $\rho_i$: LossFunction, 是一个scalar function，用于减少Outlisers的影响
+  - $l_j,u_j$是第j个优化变量的上限和下限。最简单的就是取正负无穷，即无约束
 
 - 用ceres求解最小二乘问题需要做到：
 
   1. 定义参数块：可以是向量，四元数，李代数。
   2. 定义残差块f()的计算方式，ceres对他们求平方和之后，作为目标函数的值
   3. 把所有参数块和残差块加入ceres定义的Problem对象中，调用solve函数求解即可。
+
+### 2.1 一个简单的例子
+
+- 问题：
+
+  找到下面这个方程的最小值
+  $$
+  \frac{1}{2}(10-x)^2
+  $$
+
+- 求解：
+
+  1. 定义一个c++11的仿函数functor来计算cost function$f(x)=10-x$
+
+     ```c++
+     struct CostFunctor {
+        template <typename T>
+        bool operator()(const T* const x, T* residual) const {
+          residual[0] = 10.0 - x[0];
+          return true;
+        }
+     };
+     ```
+
+     > **仿函数functor**: 就是在类/结构体中实现一个`operator()`，使得这个类/结构体具有类似函数的行为
+     >
+     > **const T* const x** : 第一个const修饰T*，表示不能修改T类型的对象。第二个const修饰指针本身，即不能指向其他地址。因此：不能通过 `x` 修改它指向的 `T` 类型对象的值，也不能修改 `x` 本身（即不能让 `x` 指向其他地址）
+     >
+     > **operator()(....) const{...}的const**:表示这个成员函数不会修改它所属的类的任何成员变量
+     >
+     > **模板**：可以允许ceres在调用`CostFunctor::operator<T>()`时，使用T=double或者T=jet(雅可比矩阵)等不同类型数据结构
+
+  2. 构建最小二乘法问题：
+
+     ```c++
+     int main(int, char**) {
+         
+         // 1. 设置初始值
+         double ininal_num=5.0;
+         double x=ininal_num;
+      
+         // 2. 构建问题Problem有两个重要的成员函数：
+         // Problem::AddResidalBlock() and Problem::AddParameterBlock()
+         ceres::Problem problem;
+      
+         // 设置损失函数，这里使用自动求导计算雅克比矩阵以我们自己定义的CostFunctor为类型在进行初始化
+     	// <1,1>指的是CostFunctor中各个参数的维度
+         // 第一个1：CostFunctor的残差维度。第二个1:CostFunctor参数块的维度。
+         ceres::CostFunction* cost_functor=
+         new ceres::AutoDiffCostFunction<CostFunctor,1,1>(new CostFunctor);
+         // 添加残差
+         // ceres中loss/cost function的区别见上面的公式1
+        	// cost_functor即cost function 
+     	// nullptr表示没有loss funciton
+         problem.AddResidualBlock(cost_functor,nullptr,&x);
+      
+         // 3. 配置求解器
+         // ceres::Solver::Options是一个结构体，用于配置求解器的各种选项。这些选项决定了Ceres求解器如何执行优化过程
+         ceres::Solver::Options options;
+         options.max_num_iterations=20; 	// 最大迭代次数
+         options.linear_solver_type=ceres::DENSE_QR;
+         options.minimizer_progress_to_stdout=true;
+         // ceres::Solver::Summary是一个结构体，用于存储优化过程的结果和统计信息。
+         ceres::Solver::Summary summary;
+         
+         // 4. 开始求解
+         ceres::Solve(options,&problem,&summary);
+         std::cout<<summary.BriefReport()<<"\n";
+         std::cout<<"x:"<<ininal_num<<"->"<<x<<"\n";
+         return 0;
+      
+     }
+     ```
+
+     - 求导
+
+       1. **自动求导**(automatic dirivatives)：如上面的`ceres::CostFunction* cost_functor = new ceres::AutoDiffCostFunction<CostFunctor,1,1>(new CostFunctor);`
+
+       2. **数值求导**(numeric derivatives)：在自动求导的基础上加一个有限微分计划，如：`ceres::CENTRAL`
+
+          ```
+          CostFunction* cost_function =
+            new NumericDiffCostFunction<CostFunctor, ceres::CENTRAL, 1, 1>();
+          problem.AddResidualBlock(cost_function, nullptr, &x);
+          ```
+
+       3. **解析求导**(Analytic derivatives)：允许我们自己实现残差residual和雅可比计算公式jacobian comutation code
+
+          ```c++
+          class QuadraticCostFunction : public ceres::SizedCostFunction<1, 1> {
+           public:
+            virtual ~QuadraticCostFunction() {}
+            virtual bool Evaluate(double const* const* parameters,
+                                  double* residuals,
+                                  double** jacobians) const {
+              const double x = parameters[0][0];
+              residuals[0] = 10 - x;
+          
+              // Compute the Jacobian if asked for.
+              if (jacobians != nullptr && jacobians[0] != nullptr) {
+                jacobians[0][0] = -1;
+              }
+              return true;
+            }
+          };
+          ```
+
+          
+
+### 2.2 复杂点的例子
+
+- 问题: powell' function
+  $$
+  \begin{aligned}
+  &f_{1}(x) =x_1+10x_2 \\
+  &f_{2}(x) =\sqrt{5}(x_3-x_4) \\
+  &f_3(x) =(x_2-2x_3)^2 \\
+  &f_{4}(x) =\sqrt{10}(x_1-x_4)^2 \\
+  &F(x) =[f_1(x), f_2(x), f_3(x), f_4(x)] 
+  \end{aligned}
+  $$
+  希望找到一个$x=[x_1,x_2,x_3,x_4]$让$\frac{1}{2}||F(x)||^2$最小。
+
+- 求解：
+
+  1. 用仿函数定义各个cost function
+
+     ```c++
+     struct F1 {
+       template <typename T>
+       bool operator()(const T* const x1, const T* const x2, T* residual) const {
+         // f1 = x1 + 10 * x2;
+         residual[0] = x1[0] + 10.0 * x2[0];
+         return true;
+       }
+     };
+     struct F2 {
+       template <typename T>
+       bool operator()(const T* const x3, const T* const x4, T* residual) const {
+         // f2 = sqrt(5) (x3 - x4)
+         residual[0] = sqrt(5.0) * (x3[0] - x4[0]);
+         return true;
+       }
+     };
+     struct F3 {
+       template <typename T>
+       bool operator()(const T* const x2, const T* const x3, T* residual) const {
+         // f3 = (x2 - 2 x3)^2
+         residual[0] = (x2[0] - 2.0 * x3[0]) * (x2[0] - 2.0 * x3[0]);
+         return true;
+       }
+     };
+     struct F4 {
+       template <typename T>
+       bool operator()(const T* const x1, const T* const x4, T* residual) const {
+         // f4 = sqrt(10) (x1 - x4)^2
+         residual[0] = sqrt(10.0) * (x1[0] - x4[0]) * (x1[0] - x4[0]);
+         return true;
+       }
+     };
+     ```
+
+  2. 构建最小二乘问题
+
+     ```c++
+     double x1 =  3.0; double x2 = -1.0; double x3 =  0.0; double x4 = 1.0;
+     
+     ceres::Problem problem;
+     
+     // Add residual terms to the problem using the autodiff wrapper to get the derivatives automatically.
+     problem.AddResidualBlock(
+       new ceres::AutoDiffCostFunction<F1, 1, 1, 1>(), nullptr, &x1, &x2);
+     problem.AddResidualBlock(
+       new ceres::AutoDiffCostFunction<F2, 1, 1, 1>(), nullptr, &x3, &x4);
+     problem.AddResidualBlock(
+       new ceres::AutoDiffCostFunction<F3, 1, 1, 1>(), nullptr, &x2, &x3);
+     problem.AddResidualBlock(
+       new ceres::AutoDiffCostFunction<F4, 1, 1, 1>(), nullptr, &x1, &x4);
+     ```
+
+  3. 优化求导
+
+     ```c++
+     Solver::Options options;
+     options.max_num_iterations = 100;
+     options.linear_solver_type = ceres::DENSE_QR;
+     options.minimizer_progress_to_stdout = true;
+     Solver::Summary summary;
+     Solve(options, &problem, &summary);
+     std::cout << summary.FullReport() << "\n";
+     ```
 
 # g2o库
 
