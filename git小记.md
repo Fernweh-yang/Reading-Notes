@@ -246,6 +246,13 @@ got push origin dev					# 不想关联远程分支的话，就每次都要同时
   - remote_name: 远程名称，通常都是Origin
   - -d: --delete的别名
   - remote_branch_name: 要删除的远程分支名
+  
+- 如果远程某个分枝合并了，但本地`gir branch -a`还是显示，是因为本地没有跟踪最新的远程的仓库
+
+  `git fetch --prune`
+
+  - `git fetch`： 从远程仓库获取最新的分枝信息
+  - `--prune`：删除本地已删除的远程分枝引用
 
 ### 2.4.9查看分支
 - 查看本地分支:`git branch`
