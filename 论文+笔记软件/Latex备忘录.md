@@ -78,7 +78,7 @@ $$
 | \curlywedge | $\curlywedge$ | \curlyvee | $\curlyvee$ |
 | \circledcirc | $\circledcirc$ | \Phi | $\Phi$ |
 | \varpi | $\varpi$ |  |  |
-|  |  |  |  |
+| \subseteq | $\subseteq$ | \subset | $\subset$ |
 |  |  |  |  |
 
 # 各种等号
