@@ -14,7 +14,22 @@
 - **ctrl+alt+shift+N**: 只搜索符号(函数名、变量名)
 - **ctrl+shift+A**: 只搜索操作actions（重构、运行配置等clion中各种命令）
 
+## 全局修改变量名
 
+shift + F6
+
+## 删除
+
+- 删除行：ctrl + Y
+
+## 快速移动多行代码
+
+1. 按住shift选中多行代码
+2. 按住ctrl + shift上下移动
+
+## 在.cpp中自动创建.h中定义的函数
+
+在.h定义的函数处按:  alt+enter
 
 # 安装插件
 
@@ -41,8 +56,6 @@
 
 ## 连接到docker环境
 
-### 1. 配置clion
-
 1. 打开settings/toolchains, 创建一个新的toolchain：点+，然后选Docker
 
    > toolchain：包含所有用于构建和运行应用的工具
@@ -63,3 +76,19 @@
 
    就是把cmake .. -Dxxxx 这些xxxx写通过Gui设置进去了
 
+## 连接到远程主机
+
+1. 打开settings/toolchains, 创建一个新的toolchain：点+，然后选remote host
+
+2. 点击credentials创建连接
+
+   - Host: 填远程主机ip地址
+
+     在远程主机用ifconfig来查看ip地址
+
+   - Username + password
+
+3. 映射文件夹：
+
+   - 打开settings/deployment，选择刚创建的远程服务器。
+   - 在mappings中，在local path中填入本地文件夹地址，在deployment path中填入远程服务器项目的文件夹地址。

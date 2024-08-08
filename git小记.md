@@ -624,6 +624,17 @@ type+subject
      git push
      ```
 
+## 3.4 修改commit记录
+
+```shell
+# N表示最新的N条commit记录
+git rebase -i HEAD~N
+```
+
+然后会进入一个vim编写界面，修改自己要修改的commit, 常用标签
+
+- pick: 要接受的
+- squash: 合并到上一条的
 
 # 四、 场景案例
 
